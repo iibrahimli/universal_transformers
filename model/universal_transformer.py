@@ -224,7 +224,9 @@ class UniversalTransformer(nn.Module):
 
         # start from pad token, append last generated token to the input to
         # the decoder and generate until EOS token
-        generated = torch.tensor([[eos_token_id]], device=memory.device, dtype=torch.long)
+        generated = torch.tensor(
+            [[eos_token_id]], device=memory.device, dtype=torch.long
+        )
         cur_length = 1
         while cur_length < max_length:
             target = self.target_tok_emb(generated)
@@ -235,9 +237,10 @@ class UniversalTransformer(nn.Module):
             new_token = output[0, -1:].unsqueeze(0)
             generated = torch.cat([generated, new_token], dim=1)
             cur_length += 1
-            if cur_length == max_length:
-                break
-            if generated.squeeze()[-1].item() == eos_token_id and cur_length >= min_length:
+            if (
+                generated.squeeze()[-1].item() == eos_token_id
+                and cur_length >= min_length
+            ):
                 break
         return generated
 
