@@ -76,13 +76,13 @@ class UniversalTransformer(nn.Module):
         return output
 
     def forward_encoder(self, src: Tensor, src_padding_mask=None):
-        halting_probability = torch.zeros(src.shape[:-1], device=src.device)
-        remainders = torch.zeros(src.shape[:-1], device=src.device)
-        n_updates = torch.zeros(src.shape[:-1], device=src.device)
+        halting_probability = torch.zeros((*src.shape[:-1], 1), device=src.device)
+        remainders = torch.zeros_like(halting_probability)
+        n_updates = torch.zeros_like(halting_probability)
         new_src = src.clone()
         for time_step in range(self.max_time_step):
             still_running = halting_probability < self.halting_thresh
-            p = self.halting_layer(new_src).squeeze(dim=-1)
+            p = self.halting_layer(new_src)
             new_halted = (halting_probability + p * still_running) > self.halting_thresh
             still_running = (halting_probability + p * still_running) <= self.halting_thresh
             halting_probability += p * still_running
@@ -97,13 +97,13 @@ class UniversalTransformer(nn.Module):
 
     def forward_decoder(self, memory: Tensor, target, target_mask=None,
                         memory_padding_mask=None, target_padding_mask=None):
-        halting_probability = torch.zeros(target.shape[:-1], device=target.device)
-        remainders = torch.zeros(target.shape[:-1], device=target.device)
-        n_updates = torch.zeros(target.shape[:-1], device=target.device)
+        halting_probability = torch.zeros((*target.shape[:-1], 1), device=target.device)
+        remainders = torch.zeros_like(halting_probability)
+        n_updates = torch.zeros_like(halting_probability)
         new_target = target.clone()
         for time_step in range(self.max_time_step):
             still_running = halting_probability < self.halting_thresh
-            p = self.halting_layer(new_target).squeeze(dim=-1)
+            p = self.halting_layer(new_target)
             new_halted = (halting_probability + p * still_running) > self.halting_thresh
             still_running = (halting_probability + p * still_running) <= self.halting_thresh
             halting_probability += p * still_running
