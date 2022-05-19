@@ -68,7 +68,7 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
     input_ids = tokenizer(
         source,
         truncation=True,
-        max_length=model.max_len,
+        max_length=model.max_seq_len,
         return_tensors="pt",
     )["input_ids"]
     input_ids = input_ids.to(device)
