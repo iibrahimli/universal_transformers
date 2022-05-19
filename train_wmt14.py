@@ -184,9 +184,7 @@ if __name__ == "__main__":
         default=200,
         help="Run validation (& log) every N steps"
     )
-    args = parser.parse_args(args=[])
-
-    logger.info(f"Using args: {args}")
+    args = parser.parse_args()
 
     # Load tokenizer (GPT-2 uses BPE)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -227,6 +225,8 @@ if __name__ == "__main__":
     # Initialize W&B
     wandb.init(project="universal_transformer_wmt14_test", config=args)
     wandb.watch(model, log_freq=100)
+
+    logger.info(f"Using args: {wandb.config}")
 
     # Training loop
     for i, batch in cycle(enumerate(train_dataloader)):
