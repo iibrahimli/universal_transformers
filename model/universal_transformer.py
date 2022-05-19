@@ -47,7 +47,7 @@ class UniversalTransformer(nn.Module):
         d_model: int,
         n_head: int,
         d_feedforward: int,
-        max_len: int,
+        max_seq_len: int,
         max_time_step: int,
         halting_thresh: float,
     ):
@@ -60,7 +60,7 @@ class UniversalTransformer(nn.Module):
             d_model: Dimensionality of the model.
             n_head: Number of attention heads.
             d_feedforward: Dimensionality of the feedforward layer.
-            max_len: Maximum length of the sequence.
+            max_seq_len: Maximum length of the sequence.
             max_time_step: Maximum time step of the model.
             halting_thresh: Threshold for halting.
         """
@@ -72,7 +72,7 @@ class UniversalTransformer(nn.Module):
             d_model, n_head, d_feedforward, activation=nn.GELU(), batch_first=True
         )
         self.halting_layer = nn.Sequential(nn.Linear(d_model, 1), nn.Sigmoid())
-        self.pos_encoder = PositionalTimestepEncoding(d_model, max_len=max_len)
+        self.pos_encoder = PositionalTimestepEncoding(d_model, max_len=max_seq_len)
 
         # token embeddings
         self.source_tok_emb = TokenEmbedding(source_vocab_size, d_model)
@@ -82,7 +82,7 @@ class UniversalTransformer(nn.Module):
         self.generator = nn.Linear(d_model, target_vocab_size)
 
         # constants
-        self.max_len = max_len
+        self.max_seq_len = max_seq_len
         self.max_time_step = max_time_step
         self.halting_thresh = halting_thresh
         self.source_vocab_size = source_vocab_size
