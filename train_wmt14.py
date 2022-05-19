@@ -208,7 +208,7 @@ if __name__ == "__main__":
         source_vocab_size=tokenizer.vocab_size,
         target_vocab_size=tokenizer.vocab_size,
         d_model=args.d_model,
-        n_head=args.n_heads,
+        n_heads=args.n_heads,
         d_feedforward=args.d_feedforward,
         max_seq_len=args.max_seq_len,
         max_time_step=args.max_time_step,
