@@ -7,6 +7,8 @@ TODO:
  - halting_layer no gradient
  - check what else has no gradient
  - make it faster
+ - train & val log interval
+ - take config from cmd args
 
 """
 
