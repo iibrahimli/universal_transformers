@@ -166,6 +166,18 @@ if __name__ == "__main__":
         default=0.1,
         help="Label smoothing",
     )
+    parser.add_argument(
+        "--tr_log_interval",
+        type=int,
+        default=5,
+        help="Log training loss every N steps"
+    )
+    parser.add_argument(
+        "--val_interval",
+        type=int,
+        default=200,
+        help="Run validation (& log) every N steps"
+    )
     args = parser.parse_args(args=[])
 
     # Load tokenizer (GPT-2 uses BPE)
@@ -220,11 +232,11 @@ if __name__ == "__main__":
         optimizer.step()
         lr = scheduler.step()
 
-        if i % 5 == 0:
+        if i % args.tr_log_interval == 0:
             wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr})
 
         # validate & log
-        if i % 200 == 0:
+        if i % args.val_interval == 0:
             model.eval()
             val_losses = []
             bleu = load_metric("bleu")
