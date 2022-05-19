@@ -79,11 +79,11 @@ def get_dataloaders(batch_size, map_batch_size: int = 500):
 
     # TODO: dataset sizes (take)
     # streaming to avoid downloading the whole dataset
-    train_ds = load_dataset("wmt14", "de-en", split="train", streaming="True")
+    train_ds = load_dataset("wmt14", "de-en", split="train", streaming=True)
     validation_ds = load_dataset(
-        "wmt14", "de-en", split="validation", streaming="True"
+        "wmt14", "de-en", split="validation", streaming=True
     ).take(100)
-    test_ds = load_dataset("wmt14", "de-en", split="test", streaming="True")
+    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True)
 
     train_dl = _get_dataloader_from_ds(train_ds)
     validation_dl = _get_dataloader_from_ds(validation_ds)
@@ -197,7 +197,9 @@ if __name__ == "__main__":
                 source_texts = batch["translation"]["de"]
                 target_texts = batch["translation"]["en"]
                 for src_txt, tgt_txt in zip(source_texts, target_texts):
-                    translated = utils.translate_text(src_txt, model, tokenizer)
+                    translated = utils.translate_text(
+                        src_txt, model, tokenizer, device=DEVICE
+                    )
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
@@ -208,23 +210,23 @@ if __name__ == "__main__":
             tr_loss_value = tr_loss.item()
             val_loss_value = torch.mean(torch.tensor(val_losses)).item()
             bleu_score = bleu.compute()["bleu"]
-            demo_trans_text = utils.translate_text(demo_source_txt, model, tokenizer)
+            demo_trans_text = utils.translate_text(
+                demo_source_txt, model, tokenizer, device=DEVICE
+            )
 
             # log to W&B and console
             wandb.log(
                 {
                     "tr": {"loss": tr_loss_value},
                     "val": {"loss": val_loss_value, "bleu": bleu_score},
-                    "demo_translated": wandb.Html(demo_trans_text)
+                    "demo_translated": wandb.Html(demo_trans_text),
                 },
-                step=i
+                step=i,
             )
             logger.info(
                 f"[{i}] tr_loss: {tr_loss_value:.4f}  val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
             )
             # logger.info(f"DE: {demo_source_txt}")
             # logger.info(f"EN: {demo_target_txt}")
-            logger.info(
-                f"output: {demo_trans_text}"
-            )
+            logger.info(f"output: {demo_trans_text}")
             logger.info("")
