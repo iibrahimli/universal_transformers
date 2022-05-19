@@ -14,6 +14,7 @@ TODO:
 
 import sys
 from itertools import cycle
+from argparse import ArgumentParser
 
 import wandb
 import torch
@@ -121,28 +122,59 @@ def batch_loss_step(model, batch, loss_fn, device):
 
 if __name__ == "__main__":
 
+    # Parse arguments
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=16,
+        help="Batch size",
+    )
+    parser.add_argument(
+        "--d_model",
+        type=int,
+        default=512,
+        help="Model dimension",
+    )
+    parser.add_argument(
+        "--d_feedforward",
+        type=int,
+        default=2048,
+        help="Feedforward dimension",
+    )
+    parser.add_argument(
+        "--max_seq_len",
+        type=int,
+        default=100,
+        help="Maximum sequence length",
+    )
+    parser.add_argument(
+        "--max_time_step",
+        type=int,
+        default=10,
+        help="Maximum time step",
+    )
+    parser.add_argument(
+        "--halting_thresh",
+        type=float,
+        default=0.8,
+        help="Halting threshold",
+    )
+    parser.add_argument(
+        "--label_smoothing",
+        type=float,
+        default=0.1,
+        help="Label smoothing",
+    )
+    args = parser.parse_args(args=[])
+
     # Load tokenizer (GPT-2 uses BPE)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
-    # Training config
-    config = dict(
-        source_vocab_size=tokenizer.vocab_size,
-        target_vocab_size=tokenizer.vocab_size,
-        d_model=32,
-        n_head=8,
-        d_feedforward=64,
-        max_len=MAX_SEQ_LENGTH,
-        max_time_step=10,
-        halting_thresh=0.8,
-        batch_size=4,
-        label_smoothing=0.1,
-        learning_rate=2e-3,
-    )
-
     # Prepare dataloaders
     train_dataloader, validation_dataloader, test_dataloader = get_dataloaders(
-        config["batch_size"], map_batch_size=20
+        args.batch_size, map_batch_size=10 * args.batch_size
     )
 
     # Demo sentence to try to translate throughout training
@@ -153,24 +185,27 @@ if __name__ == "__main__":
 
     # Initialize model
     model = UniversalTransformer(
-        source_vocab_size=config["source_vocab_size"],
-        target_vocab_size=config["target_vocab_size"],
-        d_model=config["d_model"],
-        n_head=config["n_head"],
-        d_feedforward=config["d_feedforward"],
-        max_len=config["max_len"],
-        max_time_step=config["max_time_step"],
-        halting_thresh=config["halting_thresh"],
+        source_vocab_size=tokenizer.vocab_size,
+        target_vocab_size=tokenizer.vocab_size,
+        d_model=args.d_model,
+        n_head=args.n_head,
+        d_feedforward=args.d_feedforward,
+        max_seq_len=args.max_len,
+        max_time_step=args.max_time_step,
+        halting_thresh=args.halting_thresh,
     ).to(DEVICE)
 
-    # Loss and optimizer
-    loss = torch.nn.CrossEntropyLoss(label_smoothing=config["label_smoothing"]).to(
-        DEVICE
+    # Training extras
+    loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(DEVICE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = utils.CustomLRScheduler(
+        optimizer,
+        d_model=args.d_model,
+        warmup_steps=5000,
     )
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
 
     # Initialize W&B
-    wandb.init(project="universal_transformer_wmt14_test", config=config)
+    wandb.init(project="universal_transformer_wmt14_test", config=args)
     wandb.watch(model, log_freq=100)
 
     # Training loop
@@ -183,9 +218,13 @@ if __name__ == "__main__":
         tr_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
+        lr = scheduler.step()
+
+        if i % 5 == 0:
+            wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr})
 
         # validate & log
-        if i % 5 == 0:
+        if i % 200 == 0:
             model.eval()
             val_losses = []
             bleu = load_metric("bleu")
