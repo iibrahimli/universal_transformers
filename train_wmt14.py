@@ -143,6 +143,12 @@ if __name__ == "__main__":
         help="Feedforward dimension",
     )
     parser.add_argument(
+        "--n_heads",
+        type=int,
+        default=8,
+        help="Number of attention heads",
+    )
+    parser.add_argument(
         "--max_seq_len",
         type=int,
         default=100,
@@ -180,6 +186,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args(args=[])
 
+    logger.info(f"Using args: {args}")
+
     # Load tokenizer (GPT-2 uses BPE)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
@@ -200,7 +208,7 @@ if __name__ == "__main__":
         source_vocab_size=tokenizer.vocab_size,
         target_vocab_size=tokenizer.vocab_size,
         d_model=args.d_model,
-        n_head=args.n_head,
+        n_head=args.n_heads,
         d_feedforward=args.d_feedforward,
         max_seq_len=args.max_len,
         max_time_step=args.max_time_step,

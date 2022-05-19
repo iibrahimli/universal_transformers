@@ -45,7 +45,7 @@ class UniversalTransformer(nn.Module):
         source_vocab_size: int,
         target_vocab_size: int,
         d_model: int,
-        n_head: int,
+        n_heads: int,
         d_feedforward: int,
         max_seq_len: int,
         max_time_step: int,
@@ -58,7 +58,7 @@ class UniversalTransformer(nn.Module):
             source_vocab_size: Number of tokens in the source vocabulary.
             target_vocab_size: Number of tokens in the target vocabulary.
             d_model: Dimensionality of the model.
-            n_head: Number of attention heads.
+            n_heads: Number of attention heads.
             d_feedforward: Dimensionality of the feedforward layer.
             max_seq_len: Maximum length of the sequence.
             max_time_step: Maximum time step of the model.
@@ -66,10 +66,10 @@ class UniversalTransformer(nn.Module):
         """
         super().__init__()
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model, n_head, d_feedforward, activation=nn.GELU(), batch_first=True
+            d_model, n_heads, d_feedforward, activation=nn.GELU(), batch_first=True
         )
         self.decoder_layer = nn.TransformerDecoderLayer(
-            d_model, n_head, d_feedforward, activation=nn.GELU(), batch_first=True
+            d_model, n_heads, d_feedforward, activation=nn.GELU(), batch_first=True
         )
         self.halting_layer = nn.Sequential(nn.Linear(d_model, 1), nn.Sigmoid())
         self.pos_encoder = PositionalTimestepEncoding(d_model, max_len=max_seq_len)
