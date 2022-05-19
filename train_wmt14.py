@@ -226,7 +226,7 @@ if __name__ == "__main__":
     wandb.init(project="universal_transformer_wmt14_test", config=args)
     wandb.watch(model, log_freq=100)
 
-    logger.info("\nUsing args: {")
+    logger.info("Using args: {")
     for k, v in wandb.config.items():
         logger.info(f"    {k}: {v}")
     logger.info("}\n")
