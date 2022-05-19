@@ -244,7 +244,7 @@ if __name__ == "__main__":
         lr = scheduler.step()
 
         if i % args.tr_log_interval == 0:
-            wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr})
+            wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=i)
 
         # validate & log
         if i % args.val_interval == 0:
