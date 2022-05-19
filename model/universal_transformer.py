@@ -214,7 +214,7 @@ class UniversalTransformer(nn.Module):
             Sequence of generated tokens of shape [batch_size, seq_len]
         """
 
-        max_length = min(max_length, self.max_len)
+        max_length = min(max_length, self.max_seq_len)
 
         # embed source tokens
         source = self.source_tok_emb(source)
