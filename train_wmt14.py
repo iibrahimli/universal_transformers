@@ -210,7 +210,7 @@ if __name__ == "__main__":
         d_model=args.d_model,
         n_head=args.n_heads,
         d_feedforward=args.d_feedforward,
-        max_seq_len=args.max_len,
+        max_seq_len=args.max_seq_len,
         max_time_step=args.max_time_step,
         halting_thresh=args.halting_thresh,
     ).to(DEVICE)
