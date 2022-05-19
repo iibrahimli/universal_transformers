@@ -220,6 +220,7 @@ if __name__ == "__main__":
         optimizer,
         d_model=args.d_model,
         warmup_steps=5000,
+        lr_mul=2.
     )
 
     # Initialize W&B
