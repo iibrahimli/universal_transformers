@@ -226,7 +226,10 @@ if __name__ == "__main__":
     wandb.init(project="universal_transformer_wmt14_test", config=args)
     wandb.watch(model, log_freq=100)
 
-    logger.info(f"Using args: {wandb.config}")
+    logger.info("\nUsing args: {")
+    for k, v in wandb.config.items():
+        logger.info(f"    {k}: {v}")
+    logger.info("}\n")
 
     # Training loop
     for i, batch in cycle(enumerate(train_dataloader)):
