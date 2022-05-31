@@ -211,6 +211,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Create checkpoints directory if it doesn't exist
+    Path(args.checkpoints_path).mkdir(parents=True, exist_ok=True)
+
     # Load tokenizer (GPT-2 uses BPE)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
