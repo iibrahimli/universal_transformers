@@ -9,7 +9,7 @@ import math
 
 from tqdm import tqdm
 
-from universal_transformer import UniversalTransformer
+from model.universal_transformer import UniversalTransformer
 
 
 SRC_LANGUAGE = 'de'
@@ -194,7 +194,7 @@ def evaluate(model):
     val_dataloader = DataLoader(val_iter, batch_size=BATCH_SIZE,
                                 collate_fn=collate_fn)
 
-    for i_batch, data in val_dataloader:
+    for i_batch, data in enumerate(val_dataloader):
         src, tgt = data
         src = src.to(DEVICE)
         tgt = tgt.to(DEVICE)
@@ -204,8 +204,7 @@ def evaluate(model):
         src_padding_mask, tgt_padding_mask = create_padding_mask(
             src, tgt_input)
 
-        logits = model(src, src_padding_mask, tgt,
-                        tgt_padding_mask)
+        logits = model(src, tgt_input, src_padding_mask, tgt_padding_mask)
 
         tgt_out = tgt[1:, :]
         loss = loss_fn(logits.reshape(-1, logits.shape[-1]),

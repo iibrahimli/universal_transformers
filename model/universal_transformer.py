@@ -76,39 +76,49 @@ class UniversalTransformer(nn.Module):
         return output
 
     def forward_encoder(self, src: Tensor, src_padding_mask=None):
-        halting_values = torch.zeros(src.shape[:-1], device=src.device)
-        output = torch.zeros_like(src)
+        halting_probability = torch.zeros((*src.shape[:-1], 1), device=src.device)
+        remainders = torch.zeros_like(halting_probability)
+        n_updates = torch.zeros_like(halting_probability)
+        new_src = src.clone()
         for time_step in range(self.max_time_step):
-            src = self.coordinate_embedding(src, time_step)
-            src = self.encoder_layer(src, src_key_padding_mask=src_padding_mask)
-            halting_values += self.halting_layer(src).squeeze(dim=-1)
-            halting_bools = halting_values >= self.halting_thresh
-            src[output != 0] = output[output != 0].clone().detach()
-            output[halting_bools, :] = src[halting_bools, :].clone()
-            if halting_bools.all():
-                break
-        output[~halting_bools] = src[~halting_bools]
-        return output
+            still_running = halting_probability < self.halting_thresh
+            p = self.halting_layer(new_src)
+            new_halted = (halting_probability + p * still_running) > self.halting_thresh
+            still_running = (halting_probability + p * still_running) <= self.halting_thresh
+            halting_probability += p * still_running
+            remainders += new_halted * (1 - halting_probability)
+            halting_probability += new_halted * remainders
+            n_updates += still_running + new_halted
+            update_weights = p * still_running + new_halted * remainders
+            new_src = self.coordinate_embedding(src, time_step)
+            new_src = self.encoder_layer(new_src, src_key_padding_mask=src_padding_mask)
+            src = ((new_src * update_weights) + (src * (1 - update_weights)))
+        return src
 
     def forward_decoder(self, memory: Tensor, target, target_mask=None,
                         memory_padding_mask=None, target_padding_mask=None):
-        halting_values = torch.zeros(*target.shape[:-1], device=target.device)
-        output = torch.zeros_like(target)
-        temp_output = target
+        halting_probability = torch.zeros((*target.shape[:-1], 1), device=target.device)
+        remainders = torch.zeros_like(halting_probability)
+        n_updates = torch.zeros_like(halting_probability)
+        new_target = target.clone()
         for time_step in range(self.max_time_step):
-            target = self.coordinate_embedding(target, time_step)
-            temp_output = self.decoder_layer(temp_output, memory,
+            still_running = halting_probability < self.halting_thresh
+            p = self.halting_layer(new_target)
+            new_halted = (halting_probability + p * still_running) > self.halting_thresh
+            still_running = (halting_probability + p * still_running) <= self.halting_thresh
+            halting_probability += p * still_running
+            remainders += new_halted * (1 - halting_probability)
+            halting_probability += new_halted * remainders
+            n_updates += still_running + new_halted
+            update_weights = p * still_running + new_halted * remainders
+            new_target = self.coordinate_embedding(target, time_step)
+            new_target = self.decoder_layer(new_target, memory,
                                              tgt_mask=target_mask,
                                              tgt_key_padding_mask=target_padding_mask,
                                              memory_key_padding_mask=memory_padding_mask)
-            halting_values += self.halting_layer(temp_output).squeeze(dim=-1)
-            halting_bools = halting_values >= self.halting_thresh
-            temp_output[output != 0] = output[output != 0]
-            output[halting_bools, :] = temp_output[halting_bools, :]
-            if halting_bools.all():
-                break
-        output[~halting_bools] = temp_output[~halting_bools]
-        return output
+            target = ((new_target * update_weights) + (target * (1 - update_weights)))
+        return target
+
 
     @staticmethod
     def generate_target_mask(target):
