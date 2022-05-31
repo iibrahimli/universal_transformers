@@ -3,6 +3,7 @@ Train UT on the WMT14 de-en translation task.
 
 TODO:
  - recheck shapes in docstrings
+ - early stopping ?
  - make it faster
 """
 
