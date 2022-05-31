@@ -80,9 +80,9 @@ def get_dataloaders(
 
     # TODO: dataset sizes (take)
     # streaming to avoid downloading the whole dataset
-    train_ds = load_dataset("wmt14", "de-en", split="train", streaming=True)
-    validation_ds = load_dataset("wmt14", "de-en", split="validation", streaming=True)
-    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(
+    train_ds = load_dataset("wmt14", "de-en", split="train", streaming=False)
+    validation_ds = load_dataset("wmt14", "de-en", split="validation", streaming=False)
+    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=False).take(
         val_size
     )
     train_dl = _get_dataloader_from_ds(train_ds)
