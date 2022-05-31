@@ -123,7 +123,17 @@ class UniversalTransformer(nn.Module):
         output = self.generator(output)  # TODO (Cati) aufräumen
         return output
 
-    def forward_encoder(self, src: Tensor, src_padding_mask=None):
+    def forward_encoder(self, src: Tensor, src_padding_mask: Tensor = None):
+        """
+        Perform forward pass of the encoder.
+
+        Args:
+            source: Tensor of shape [batch_size, src_seq_len, embedding_dim]
+            source_padding_mask: Mask of shape [batch_size, src_seq_len]
+
+        Returns:
+            Has shape [batch_size, src_seq_len, embedding_dim]
+        """
         halting_probability = torch.zeros((*src.shape[:-1], 1), device=src.device)
         remainders = torch.zeros_like(halting_probability)
         n_updates = torch.zeros_like(halting_probability)
@@ -132,7 +142,9 @@ class UniversalTransformer(nn.Module):
             still_running = halting_probability < self.halting_thresh
             p = self.halting_layer(new_src)
             new_halted = (halting_probability + p * still_running) > self.halting_thresh
-            still_running = (halting_probability + p * still_running) <= self.halting_thresh
+            still_running = (
+                halting_probability + p * still_running
+            ) <= self.halting_thresh
             halting_probability += p * still_running
             remainders += new_halted * (1 - halting_probability)
             halting_probability += new_halted * remainders
@@ -140,11 +152,30 @@ class UniversalTransformer(nn.Module):
             update_weights = p * still_running + new_halted * remainders
             new_src = self.coordinate_embedding(src, time_step)
             new_src = self.encoder_layer(new_src, src_key_padding_mask=src_padding_mask)
-            src = ((new_src * update_weights) + (src * (1 - update_weights)))
+            src = (new_src * update_weights) + (src * (1 - update_weights))
         return src
 
-    def forward_decoder(self, memory: Tensor, target, target_mask=None,
-                        memory_padding_mask=None, target_padding_mask=None):
+    def forward_decoder(
+        self,
+        memory: Tensor,
+        target: Tensor,
+        target_mask: Tensor = None,
+        memory_padding_mask: Tensor = None,
+        target_padding_mask: Tensor = None,
+    ):
+        """
+        Perform forward pass of the decoder.
+
+        Args:
+            memory: Has shape [batch_size, src_seq_len, embedding_dim]
+            target: Has shape [batch_size, tgt_seq_len]
+            target_mask: Has shape [tgt_seq_len, tgt_seq_len]
+            memory_padding_mask: Has shape [batch_size, src_seq_len, embedding_dim]
+            target_padding_mask: Has shape [batch_size, tgt_seq_len]
+
+        Returns:
+            Has shape [batch_size, tgt_seq_len, embedding_dim]
+        """
         halting_probability = torch.zeros((*target.shape[:-1], 1), device=target.device)
         remainders = torch.zeros_like(halting_probability)
         n_updates = torch.zeros_like(halting_probability)
@@ -153,20 +184,24 @@ class UniversalTransformer(nn.Module):
             still_running = halting_probability < self.halting_thresh
             p = self.halting_layer(new_target)
             new_halted = (halting_probability + p * still_running) > self.halting_thresh
-            still_running = (halting_probability + p * still_running) <= self.halting_thresh
+            still_running = (
+                halting_probability + p * still_running
+            ) <= self.halting_thresh
             halting_probability += p * still_running
             remainders += new_halted * (1 - halting_probability)
             halting_probability += new_halted * remainders
             n_updates += still_running + new_halted
             update_weights = p * still_running + new_halted * remainders
             new_target = self.coordinate_embedding(target, time_step)
-            new_target = self.decoder_layer(new_target, memory,
-                                             tgt_mask=target_mask,
-                                             tgt_key_padding_mask=target_padding_mask,
-                                             memory_key_padding_mask=memory_padding_mask)
-            target = ((new_target * update_weights) + (target * (1 - update_weights)))
+            new_target = self.decoder_layer(
+                new_target,
+                memory,
+                tgt_mask=target_mask,
+                tgt_key_padding_mask=target_padding_mask,
+                memory_key_padding_mask=memory_padding_mask,
+            )
+            target = (new_target * update_weights) + (target * (1 - update_weights))
         return target
-
 
     def generate(
         self,
@@ -178,6 +213,7 @@ class UniversalTransformer(nn.Module):
         """
         Autoregressively generate output sequence.
 
+        TODO check correctness (huggingface)
         TODO add generation methods: beam search, top-k sampling, etc.
 
         Returns:
