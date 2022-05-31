@@ -248,7 +248,8 @@ if __name__ == "__main__":
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=2.0
     )
 
-    step = 0
+    # Step is incremented at the start of iteration, becomes 0
+    step = -1
     wandb_run_id = None
 
     # Resume from checkpoint if needed
