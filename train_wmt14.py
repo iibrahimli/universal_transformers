@@ -297,8 +297,6 @@ if __name__ == "__main__":
         logger.info(f"    {k}: {v}")
     logger.info("}\n")
 
-    logger.info(f"Started training ({len(train_dataloader)} steps/epoch)")
-
     # Training loop
     for batch in cycle(train_dataloader):
         step += 1
