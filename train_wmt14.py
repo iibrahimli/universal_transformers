@@ -10,6 +10,7 @@ TODO:
 import sys
 from pathlib import Path
 from itertools import cycle
+from functools import partial
 from argparse import ArgumentParser
 
 import wandb
@@ -32,23 +33,21 @@ logger.add(sys.stderr, format=log_fmt)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
 
-MAX_SEQ_LENGTH = 50
 
-
-def encode(examples):
+def encode(examples, max_seq_len=100):
     """Encode examples from dataset"""
     src_texts = [e["de"] for e in examples["translation"]]
     tgt_texts = [e["en"] for e in examples["translation"]]
     model_inputs = tokenizer(
         src_texts,
-        max_length=MAX_SEQ_LENGTH,
+        max_length=max_seq_len,
         padding="max_length",
         truncation=True,
         return_tensors="pt",
     )
     labels = tokenizer(
         tgt_texts,
-        max_length=MAX_SEQ_LENGTH,
+        max_length=max_seq_len,
         padding="max_length",
         truncation=True,
         return_tensors="pt",
@@ -65,12 +64,17 @@ def encode(examples):
     return res
 
 
-def get_dataloaders(batch_size: int, val_size: int, map_batch_size: int = 500):
+def get_dataloaders(
+    batch_size: int, val_size: int, max_seq_len: int = 100, map_batch_size: int = 500
+):
     """Get train, val, and test dataloaders"""
 
     def _get_dataloader_from_ds(ds):
-        # ds = ds.map(encode, batched=True, batch_size=map_batch_size, remove_columns=["translation"])
-        ds = ds.map(encode, batched=True, batch_size=map_batch_size)
+        ds = ds.map(
+            partial(encode, max_seq_len=max_seq_len),
+            batched=True,
+            batch_size=map_batch_size,
+        )
         ds = ds.with_format(type="torch")
         dl = torch.utils.data.DataLoader(
             ds, batch_size=batch_size, pin_memory=DEVICE.type == "cuda"
@@ -218,7 +222,10 @@ if __name__ == "__main__":
 
     # Prepare dataloaders
     train_dataloader, validation_dataloader, test_dataloader = get_dataloaders(
-        args.batch_size, val_size=args.val_size, map_batch_size=10 * args.batch_size
+        args.batch_size,
+        val_size=args.val_size,
+        max_seq_len=args.max_seq_len,
+        map_batch_size=10 * args.batch_size,
     )
 
     # Demo sentence to try to translate throughout training
