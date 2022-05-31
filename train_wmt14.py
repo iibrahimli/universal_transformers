@@ -66,25 +66,23 @@ def encode(examples):
     return res
 
 
-def get_dataloaders(batch_size, map_batch_size: int = 500):
+def get_dataloaders(batch_size: int, val_size: int, map_batch_size: int = 500):
     """Get train, val, and test dataloaders"""
 
     def _get_dataloader_from_ds(ds):
-        # TODO: batchsize
         # ds = ds.map(encode, batched=True, batch_size=map_batch_size, remove_columns=["translation"])
         ds = ds.map(encode, batched=True, batch_size=map_batch_size)
         ds = ds.with_format(type="torch")
-        dl = torch.utils.data.DataLoader(ds, batch_size=batch_size)
+        dl = torch.utils.data.DataLoader(
+            ds, batch_size=batch_size, pin_memory=DEVICE.type == "cuda"
+        )
         return dl
 
     # TODO: dataset sizes (take)
     # streaming to avoid downloading the whole dataset
     train_ds = load_dataset("wmt14", "de-en", split="train", streaming=True)
-    validation_ds = load_dataset(
-        "wmt14", "de-en", split="validation", streaming=True
-    ).take(100)
-    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True)
-
+    validation_ds = load_dataset("wmt14", "de-en", split="validation", streaming=True)
+    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(val_size)
     train_dl = _get_dataloader_from_ds(train_ds)
     validation_dl = _get_dataloader_from_ds(validation_ds)
     test_dl = _get_dataloader_from_ds(test_ds)
@@ -126,6 +124,12 @@ if __name__ == "__main__":
         type=int,
         default=16,
         help="Batch size",
+    )
+    parser.add_argument(
+        "--val_size",
+        type=int,
+        default=500,
+        help="Number of samples in the validation set",
     )
     parser.add_argument(
         "--d_model",
@@ -170,16 +174,13 @@ if __name__ == "__main__":
         help="Label smoothing",
     )
     parser.add_argument(
-        "--tr_log_interval",
-        type=int,
-        default=5,
-        help="Log training loss every N steps"
+        "--tr_log_interval", type=int, default=5, help="Log training loss every N steps"
     )
     parser.add_argument(
         "--val_interval",
         type=int,
         default=200,
-        help="Run validation (& log) every N steps"
+        help="Run validation (& log) every N steps",
     )
     args = parser.parse_args()
 
@@ -214,10 +215,7 @@ if __name__ == "__main__":
     loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = utils.CustomLRScheduler(
-        optimizer,
-        d_model=args.d_model,
-        warmup_steps=5000,
-        lr_mul=2.
+        optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=2.0
     )
 
     # Initialize W&B
