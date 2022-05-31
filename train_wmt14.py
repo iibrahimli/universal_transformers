@@ -30,9 +30,6 @@ logger.remove()
 log_fmt = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | {message}"
 logger.add(sys.stderr, format=log_fmt)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {DEVICE}")
-
 
 def encode(examples, max_seq_len=100):
     """Encode examples from dataset"""
@@ -77,7 +74,7 @@ def get_dataloaders(
         )
         ds = ds.with_format(type="torch")
         dl = torch.utils.data.DataLoader(
-            ds, batch_size=batch_size, pin_memory=DEVICE.type == "cuda"
+            ds, batch_size=batch_size, pin_memory=device.type == "cuda"
         )
         return dl
 
@@ -211,7 +208,24 @@ if __name__ == "__main__":
         default=1000,
         help="Save checkpoint every N steps",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="PyTorch device to use. None to use GPU if available else CPU",
+    )
     args = parser.parse_args()
+
+    if args.device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = args.device
+        if device.type == "cuda" and not torch.cuda.is_available():
+            logger.warning(
+                f"Provided device {device}, but it is not available. Exiting."
+            )
+            exit(1)
+    logger.info(f"Using device: {device}")
 
     # Create checkpoints directory if it doesn't exist
     Path(args.checkpoints_path).mkdir(parents=True, exist_ok=True)
@@ -244,10 +258,10 @@ if __name__ == "__main__":
         max_seq_len=args.max_seq_len,
         max_time_step=args.max_time_step,
         halting_thresh=args.halting_thresh,
-    ).to(DEVICE)
+    ).to(device)
 
     # Training extras
-    loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(DEVICE)
+    loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = utils.CustomLRScheduler(
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=2.0
@@ -290,7 +304,7 @@ if __name__ == "__main__":
         optimizer.zero_grad()
 
         # Weight update
-        out, tr_loss = batch_loss_step(model, batch, loss, DEVICE)
+        out, tr_loss = batch_loss_step(model, batch, loss, device)
         tr_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
@@ -307,7 +321,7 @@ if __name__ == "__main__":
 
             for batch in validation_dataloader:
                 with torch.no_grad():
-                    out, val_loss = batch_loss_step(model, batch, loss, DEVICE)
+                    out, val_loss = batch_loss_step(model, batch, loss, device)
                     val_losses.append(val_loss.item())
 
                 # compute BLEU
@@ -315,7 +329,7 @@ if __name__ == "__main__":
                 target_texts = batch["translation"]["en"]
                 for src_txt, tgt_txt in zip(source_texts, target_texts):
                     translated = utils.translate_text(
-                        src_txt, model, tokenizer, device=DEVICE
+                        src_txt, model, tokenizer, device=device
                     )
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
@@ -328,7 +342,7 @@ if __name__ == "__main__":
             val_loss_value = torch.mean(torch.tensor(val_losses)).item()
             bleu_score = bleu.compute()["bleu"]
             demo_trans_text = utils.translate_text(
-                demo_source_txt, model, tokenizer, device=DEVICE
+                demo_source_txt, model, tokenizer, device=device
             )
 
             # save checkpoint
