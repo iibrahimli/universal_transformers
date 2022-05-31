@@ -20,6 +20,9 @@ class CustomLRScheduler:
         self.warmup_steps = warmup_steps
         self.lr_mul = lr_mul
         self.i_step = 0
+    
+    def set_step(self, step: int):
+        self.i_step = step
 
     def step(self) -> float:
         self.i_step += 1

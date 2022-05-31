@@ -10,6 +10,7 @@ TODO:
 """
 
 import sys
+from pathlib import Path
 from itertools import cycle
 from argparse import ArgumentParser
 
@@ -82,7 +83,9 @@ def get_dataloaders(batch_size: int, val_size: int, map_batch_size: int = 500):
     # streaming to avoid downloading the whole dataset
     train_ds = load_dataset("wmt14", "de-en", split="train", streaming=True)
     validation_ds = load_dataset("wmt14", "de-en", split="validation", streaming=True)
-    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(val_size)
+    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(
+        val_size
+    )
     train_dl = _get_dataloader_from_ds(train_ds)
     validation_dl = _get_dataloader_from_ds(validation_ds)
     test_dl = _get_dataloader_from_ds(test_ds)
@@ -119,6 +122,24 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = ArgumentParser()
+    parser.add_argument(
+        "--resume_checkpoint",
+        type=str,
+        default=None,
+        help="Checkpoint to resume training from",
+    )
+    parser.add_argument(
+        "--checkpoints_path",
+        type=str,
+        default="checkpoints",
+        help="Path to directory where model checkpoints will be saved",
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default="universal_transformer_wmt14",
+        help="Name of the W&B project",
+    )
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -179,8 +200,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_interval",
         type=int,
-        default=200,
+        default=500,
         help="Run validation (& log) every N steps",
+    )
+    parser.add_argument(
+        "--save_interval",
+        type=int,
+        default=1000,
+        help="Save checkpoint every N steps",
     )
     args = parser.parse_args()
 
@@ -218,8 +245,28 @@ if __name__ == "__main__":
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=2.0
     )
 
+    step = 0
+    wandb_run_id = None
+
+    # Resume from checkpoint if needed
+    if args.resume_checkpoint is not None:
+        checkpoint = torch.load(args.resume_checkpoint)
+        step = checkpoint["step"]
+        wandb_run_id = checkpoint["wandb_run_id"]
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.set_step(step)
+        logger.info(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
+
     # Initialize W&B
-    wandb.init(project="universal_transformer_wmt14_test", config=args)
+    if wandb_run_id is None:
+        # Not resuming from checkpoint
+        wandb.init(project=args.wandb_project, config=args)
+    else:
+        # Resume run
+        wandb.init(
+            project=args.wandb_project, id=wandb_run_id, config=args, resume="must"
+        )
     wandb.watch(model, log_freq=100)
 
     logger.info("Using args: {")
@@ -228,7 +275,8 @@ if __name__ == "__main__":
     logger.info("}\n")
 
     # Training loop
-    for i, batch in cycle(enumerate(train_dataloader)):
+    for batch in cycle(train_dataloader):
+        step += 1
         model.train()
         optimizer.zero_grad()
 
@@ -239,11 +287,11 @@ if __name__ == "__main__":
         optimizer.step()
         lr = scheduler.step()
 
-        if i % args.tr_log_interval == 0:
-            wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=i)
+        if step % args.tr_log_interval == 0:
+            wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=step)
 
         # validate & log
-        if i % args.val_interval == 0:
+        if step % args.val_interval == 0:
             model.eval()
             val_losses = []
             bleu = load_metric("bleu")
@@ -274,6 +322,20 @@ if __name__ == "__main__":
                 demo_source_txt, model, tokenizer, device=DEVICE
             )
 
+            # save checkpoint
+            if step % args.save_interval == 0:
+                cp_path = Path(args.checkpoints_path) / f"step_{step}.pt"
+                torch.save(
+                    {
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "wandb_run_id": wandb.run.id,
+                    },
+                    cp_path,
+                )
+                logger.info(f"Saved checkpoint to {cp_path}")
+
             # log to W&B and console
             wandb.log(
                 {
@@ -281,10 +343,10 @@ if __name__ == "__main__":
                     "val": {"loss": val_loss_value, "bleu": bleu_score},
                     "demo_translated": wandb.Html(demo_trans_text),
                 },
-                step=i,
+                step=step,
             )
             logger.info(
-                f"[{i}] tr_loss: {tr_loss_value:.4f}  val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
+                f"[{step}] tr_loss: {tr_loss_value:.4f}  val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
             )
             # logger.info(f"DE: {demo_source_txt}")
             # logger.info(f"EN: {demo_target_txt}")
