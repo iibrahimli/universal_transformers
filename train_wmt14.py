@@ -69,7 +69,7 @@ def get_dataloaders(
     def _get_dataloader_from_ds(ds):
         ds = ds.map(
             partial(encode, max_seq_len=max_seq_len),
-            # batched=True,
+            batched=True,
             batch_size=map_batch_size,
         )
         ds = ds.with_format(type="torch")
