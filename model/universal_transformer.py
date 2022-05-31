@@ -150,7 +150,7 @@ class UniversalTransformer(nn.Module):
             halting_probability += new_halted * remainders
             n_updates += still_running + new_halted
             update_weights = p * still_running + new_halted * remainders
-            new_src = self.coordinate_embedding(src, time_step)
+            new_src = self.pos_encoder(src, time_step)
             new_src = self.encoder_layer(new_src, src_key_padding_mask=src_padding_mask)
             src = (new_src * update_weights) + (src * (1 - update_weights))
         return src
@@ -192,7 +192,7 @@ class UniversalTransformer(nn.Module):
             halting_probability += new_halted * remainders
             n_updates += still_running + new_halted
             update_weights = p * still_running + new_halted * remainders
-            new_target = self.coordinate_embedding(target, time_step)
+            new_target = self.pos_encoder(target, time_step)
             new_target = self.decoder_layer(
                 new_target,
                 memory,
