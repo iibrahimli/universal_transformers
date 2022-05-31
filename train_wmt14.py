@@ -38,14 +38,14 @@ def encode(examples, max_seq_len=100):
     model_inputs = tokenizer(
         src_texts,
         max_length=max_seq_len,
-        padding="max_length",
+        padding="longest",
         truncation=True,
         return_tensors="pt",
     )
     labels = tokenizer(
         tgt_texts,
         max_length=max_seq_len,
-        padding="max_length",
+        padding="longest",
         truncation=True,
         return_tensors="pt",
     )
