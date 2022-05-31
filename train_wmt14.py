@@ -3,10 +3,7 @@ Train UT on the WMT14 de-en translation task.
 
 TODO:
  - recheck shapes in docstrings
- - halting_layer no gradient
- - check what else has no gradient
  - make it faster
-
 """
 
 import sys
@@ -328,7 +325,7 @@ if __name__ == "__main__":
 
             # save checkpoint
             if step % args.save_interval == 0:
-                cp_path = Path(args.checkpoints_path) / f"step_{step}.pt"
+                cp_path = Path(args.checkpoints_path) / f"latest.pt"
                 torch.save(
                     {
                         "step": step,
