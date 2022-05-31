@@ -2,13 +2,10 @@
 Train UT on the WMT14 de-en translation task.
 
 TODO:
- - custom LR schedule
  - recheck shapes in docstrings
  - halting_layer no gradient
  - check what else has no gradient
  - make it faster
- - train & val log interval
- - take config from cmd args
 
 """
 
