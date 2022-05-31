@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
     # Prepare dataloaders
     train_dataloader, validation_dataloader, test_dataloader = get_dataloaders(
-        args.batch_size, map_batch_size=10 * args.batch_size
+        args.batch_size, val_size=args.val_size, map_batch_size=10 * args.batch_size
     )
 
     # Demo sentence to try to translate throughout training
