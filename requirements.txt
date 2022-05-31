@@ -1,0 +1,5 @@
+transformers==4.15.0
+datasets==2.2.1
+wandb==0.12.15
+loguru==0.6.0
+numpy==1.22.3
