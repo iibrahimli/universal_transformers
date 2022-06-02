@@ -18,7 +18,7 @@ def prepare_target(labels: Tensor, attention_mask: Tensor, decoder_start_token_i
 
     shifted_attn_mask = attention_mask.new_zeros(attention_mask.shape)
     shifted_attn_mask[..., 1:] = attention_mask[..., :-1].clone()
-    shifted_attn_mask[..., 0] = 1
+    shifted_attn_mask[..., 0] = False
 
     return shifted_labels, shifted_attn_mask
 

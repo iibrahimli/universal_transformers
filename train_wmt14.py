@@ -53,24 +53,20 @@ def encode(examples, max_seq_len=100):
     res["input_ids"] = model_inputs["input_ids"]
     res["attention_mask"] = ~model_inputs["attention_mask"].bool()
 
-    labels, attn_mask = utils.prepare_target(
-        labels["input_ids"], labels["attention_mask"], tokenizer.pad_token_id
-    )
+    labels, attn_mask = labels["input_ids"], labels["attention_mask"]
     res["labels"] = labels
     res["labels_attention_mask"] = ~attn_mask.bool()
     return res
 
 
-def get_dataloaders(
-    batch_size: int, val_size: int, max_seq_len: int = 100, map_batch_size: int = 500
-):
+def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int = 100):
     """Get train, val, and test dataloaders"""
 
     def _get_dataloader_from_ds(ds):
         ds = ds.map(
             partial(encode, max_seq_len=max_seq_len),
             batched=True,
-            batch_size=map_batch_size,
+            batch_size=batch_size,
         )
         ds = ds.with_format(type="torch")
         dl = torch.utils.data.DataLoader(
@@ -103,15 +99,19 @@ def unpack_batch(batch):
 def batch_loss_step(model, batch, loss_fn, device):
     """Compute loss for a batch"""
     source, target, src_pad_mask, tgt_pad_mask = unpack_batch(batch)
+    shifted_target, shifted_tgt_pad_mask = utils.prepare_target(
+        target, tgt_pad_mask, tokenizer.eos_token_id
+    )
     source = source.to(device)
     target = target.to(device)
+    shifted_target = shifted_target.to(device)
     src_pad_mask = src_pad_mask.to(device)
-    tgt_pad_mask = tgt_pad_mask.to(device)
+    shifted_tgt_pad_mask = shifted_tgt_pad_mask.to(device)
     out = model(
         source,
-        target,
+        shifted_target,
         source_padding_mask=src_pad_mask,
-        target_padding_mask=tgt_pad_mask,
+        target_padding_mask=shifted_tgt_pad_mask,
     )
     loss_value = loss_fn(out.view(-1, model.target_vocab_size), target.view(-1))
     return out, loss_value
@@ -144,6 +144,12 @@ if __name__ == "__main__":
         type=int,
         default=16,
         help="Batch size",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=None,
+        help="Learning rate (None for Vaswani schedule)",
     )
     parser.add_argument(
         "--val_size",
@@ -239,7 +245,6 @@ if __name__ == "__main__":
         args.batch_size,
         val_size=args.val_size,
         max_seq_len=args.max_seq_len,
-        map_batch_size=10 * args.batch_size,
     )
 
     # Demo sentence to try to translate throughout training
@@ -308,7 +313,10 @@ if __name__ == "__main__":
         tr_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
-        lr = scheduler.step()
+        if args.lr is None:
+            lr = scheduler.step()
+        else:
+            lr = args.lr
 
         if step % args.tr_log_interval == 0:
             wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=step)
