@@ -379,7 +379,8 @@ if __name__ == "__main__":
             logger.info(
                 f"[{step}] tr_loss: {tr_loss_value:.4f}  val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
             )
-            # logger.info(f"DE: {demo_source_txt}")
-            # logger.info(f"EN: {demo_target_txt}")
+            logger.info("")
+            logger.info(f"DE: {demo_source_txt}")
+            logger.info(f"EN: {demo_target_txt}")
             logger.info(f"output: {demo_trans_text}")
             logger.info("")
