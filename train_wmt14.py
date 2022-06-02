@@ -320,6 +320,20 @@ if __name__ == "__main__":
 
         if step % args.tr_log_interval == 0:
             wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=step)
+        
+        # save checkpoint
+        if step % args.save_interval == 0:
+            cp_path = Path(args.checkpoints_path) / f"latest.pt"
+            torch.save(
+                {
+                    "step": step,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "wandb_run_id": wandb.run.id,
+                },
+                cp_path,
+            )
+            logger.info(f"Saved checkpoint to {cp_path}")
 
         # validate & log
         if step % args.val_interval == 0:
@@ -352,20 +366,6 @@ if __name__ == "__main__":
             demo_trans_text = utils.translate_text(
                 demo_source_txt, model, tokenizer, device=device
             )
-
-            # save checkpoint
-            if step % args.save_interval == 0:
-                cp_path = Path(args.checkpoints_path) / f"latest.pt"
-                torch.save(
-                    {
-                        "step": step,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "wandb_run_id": wandb.run.id,
-                    },
-                    cp_path,
-                )
-                logger.info(f"Saved checkpoint to {cp_path}")
 
             # log to W&B and console
             wandb.log(
