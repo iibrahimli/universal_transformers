@@ -289,11 +289,17 @@ if __name__ == "__main__":
     # Initialize W&B
     if wandb_run_id is None:
         # Not resuming from checkpoint
-        wandb.init(project=args.wandb_project, config=args)
+        wandb.init(
+            project=args.wandb_project, entity="universal-transformer", config=args
+        )
     else:
         # Resume run
         wandb.init(
-            project=args.wandb_project, id=wandb_run_id, config=args, resume="must"
+            project=args.wandb_project,
+            entity="universal-transformer",
+            id=wandb_run_id,
+            config=args,
+            resume="must",
         )
     wandb.watch(model, log_freq=100)
 
