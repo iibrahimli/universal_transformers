@@ -13,7 +13,7 @@ class CustomLRScheduler:
         optim: torch.optim.Optimizer,
         d_model: int,
         warmup_steps: int = 5000,
-        lr_mul: float = 2.0,
+        lr_mul: float = 1.0,
     ):
         self.optim = optim
         self.d_model = d_model

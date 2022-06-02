@@ -269,7 +269,7 @@ if __name__ == "__main__":
     loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = utils.CustomLRScheduler(
-        optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=2.0
+        optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=1.0
     )
 
     # Step is incremented at the start of iteration, becomes 0
