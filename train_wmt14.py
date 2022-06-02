@@ -348,22 +348,18 @@ if __name__ == "__main__":
                     out, val_loss = batch_loss_step(model, batch, loss, device)
                     val_losses.append(val_loss.item())
 
-                # compute BLEU on 10 samples
-                source_texts = batch["translation"]["de"]
-                target_texts = batch["translation"]["en"]
-                i_trans = 0
-                for src_txt, tgt_txt in zip(source_texts, target_texts):
-                    if i_trans > 10:
-                        break
-                    translated = utils.translate_text(
-                        src_txt, model, tokenizer, device=device
-                    )
-                    if len(translated) == 0:
-                        # to prevent division by zero in BLEU with empty string
-                        translated = "0"
-                    bleu.add(
-                        predictions=translated.split(), references=[tgt_txt.split()]
-                    )
+                # compute BLEU on first sample from each batch
+                src_txt = batch["translation"]["de"][0]
+                tgt_txt = batch["translation"]["en"][0]
+                translated = utils.translate_text(
+                    src_txt, model, tokenizer, device=device
+                )
+                if len(translated) == 0:
+                    # to prevent division by zero in BLEU with empty string
+                    translated = "0"
+                bleu.add(
+                    predictions=translated.split(), references=[tgt_txt.split()]
+                )
 
             val_loss_value = torch.mean(torch.tensor(val_losses)).item()
             bleu_score = bleu.compute()["bleu"]
