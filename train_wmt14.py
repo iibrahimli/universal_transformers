@@ -357,9 +357,7 @@ if __name__ == "__main__":
                 if len(translated) == 0:
                     # to prevent division by zero in BLEU with empty string
                     translated = "0"
-                bleu.add(
-                    predictions=translated.split(), references=[tgt_txt.split()]
-                )
+                bleu.add(predictions=translated.split(), references=[tgt_txt.split()])
 
             val_loss_value = torch.mean(torch.tensor(val_losses)).item()
             bleu_score = bleu.compute()["bleu"]
