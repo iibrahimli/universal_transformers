@@ -228,7 +228,7 @@ class UniversalTransformer(nn.Module):
         # run encoder
         memory = self.forward_encoder(source)
 
-        # start from pad token, append last generated token to the input to
+        # start from EOS token, append last generated token to the input to
         # the decoder and generate until EOS token
         generated = torch.tensor(
             [[eos_token_id]], device=memory.device, dtype=torch.long
