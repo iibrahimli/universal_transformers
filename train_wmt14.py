@@ -66,7 +66,7 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int = 100):
         ds = ds.map(
             partial(encode, max_seq_len=max_seq_len),
             batched=True,
-            batch_size=batch_size,
+            batch_size=batch_size * 10,
         )
         ds = ds.with_format(type="torch")
         dl = torch.utils.data.DataLoader(
