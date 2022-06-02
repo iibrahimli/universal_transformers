@@ -318,9 +318,11 @@ if __name__ == "__main__":
         else:
             lr = args.lr
 
+        # log training loss
         if step % args.tr_log_interval == 0:
             wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=step)
-        
+            logger.info(f"[{step}] tr_loss: {tr_loss.item():.4f}")
+
         # save checkpoint
         if step % args.save_interval == 0:
             cp_path = Path(args.checkpoints_path) / f"latest.pt"
@@ -346,10 +348,13 @@ if __name__ == "__main__":
                     out, val_loss = batch_loss_step(model, batch, loss, device)
                     val_losses.append(val_loss.item())
 
-                # compute BLEU
+                # compute BLEU on 10 samples
                 source_texts = batch["translation"]["de"]
                 target_texts = batch["translation"]["en"]
+                i_trans = 0
                 for src_txt, tgt_txt in zip(source_texts, target_texts):
+                    if i_trans > 10:
+                        break
                     translated = utils.translate_text(
                         src_txt, model, tokenizer, device=device
                     )
@@ -360,7 +365,6 @@ if __name__ == "__main__":
                         predictions=translated.split(), references=[tgt_txt.split()]
                     )
 
-            tr_loss_value = tr_loss.item()
             val_loss_value = torch.mean(torch.tensor(val_losses)).item()
             bleu_score = bleu.compute()["bleu"]
             demo_trans_text = utils.translate_text(
@@ -370,14 +374,13 @@ if __name__ == "__main__":
             # log to W&B and console
             wandb.log(
                 {
-                    "tr": {"loss": tr_loss_value},
                     "val": {"loss": val_loss_value, "bleu": bleu_score},
                     "demo_translated": wandb.Html(demo_trans_text),
                 },
                 step=step,
             )
             logger.info(
-                f"[{step}] tr_loss: {tr_loss_value:.4f}  val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
+                f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
             )
             logger.info("")
             logger.info(f"DE: {demo_source_txt}")
