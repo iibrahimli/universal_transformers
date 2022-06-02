@@ -48,7 +48,7 @@ def translate_tokens(
     with torch.no_grad():
         out = (
             model.generate(
-                input_ids,
+                input_ids[0, :last_id],
                 eos_token_id=tokenizer.eos_token_id,
                 min_length=2,
                 max_length=100,
