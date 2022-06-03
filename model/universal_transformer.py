@@ -6,13 +6,20 @@ from torch import Tensor
 
 
 class TokenEmbedding(nn.Module):
-    def __init__(self, vocab_size: int, emb_size: int):
+    def __init__(self, vocab_size: int, emb_size: int, embedding_method=None):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, emb_size)
+        if embedding_method == "linear":
+            self.embedding = nn.Linear(vocab_size, emb_size)
+        else:
+            self.embedding = nn.Embedding(vocab_size, emb_size)
         self.emb_size = emb_size
 
     def forward(self, tokens: Tensor):
-        return self.embedding(tokens.long()) * math.sqrt(self.emb_size)
+        if isinstance(self.embedding, nn.Linear):
+            tokens = tokens.unsqueeze(dim=-1).float()
+            return self.embedding(tokens)
+        else:
+            return self.embedding(tokens.long()) * math.sqrt(self.emb_size)
 
 
 class PositionalTimestepEncoding(nn.Module):
@@ -50,6 +57,8 @@ class UniversalTransformer(nn.Module):
         max_seq_len: int,
         max_time_step: int,
         halting_thresh: float,
+        embedding_method: str = None,
+        target_input_size: int = None
     ):
         """
         Universal Transformer for sequence to sequence tasks.
@@ -73,10 +82,10 @@ class UniversalTransformer(nn.Module):
         )
         self.halting_layer = nn.Sequential(nn.Linear(d_model, 1), nn.Sigmoid())
         self.pos_encoder = PositionalTimestepEncoding(d_model, max_len=max_seq_len)
-
+        target_input_size = target_input_size or target_vocab_size
         # token embeddings
-        self.source_tok_emb = TokenEmbedding(source_vocab_size, d_model)
-        self.target_tok_emb = TokenEmbedding(target_vocab_size, d_model)
+        self.source_tok_emb = TokenEmbedding(source_vocab_size, d_model, embedding_method)
+        self.target_tok_emb = TokenEmbedding(target_input_size, d_model, embedding_method)
 
         # final output generating layer
         self.generator = nn.Linear(d_model, target_vocab_size)
@@ -149,7 +158,6 @@ class UniversalTransformer(nn.Module):
             Has shape [batch_size, src_seq_len, embedding_dim]
         """
         for time_step in range(self.max_time_step):
-                source, src_key_padding_mask=source_padding_mask
             still_running = halting_probability < self.halting_thresh
             p = self.halting_layer(new_src)
             new_halted = (halting_probability + p * still_running) > self.halting_thresh
@@ -161,7 +169,7 @@ class UniversalTransformer(nn.Module):
             halting_probability += new_halted * remainders
             n_updates += still_running + new_halted
             update_weights = p * still_running + new_halted * remainders
-            new_src = self.coordinate_embedding(src, time_step)
+            new_src = self.pos_encoder(src, time_step)
             new_src = self.encoder_layer(new_src, src_key_padding_mask=src_padding_mask)
             src = (new_src * update_weights) + (src * (1 - update_weights))
         return src
@@ -203,7 +211,7 @@ class UniversalTransformer(nn.Module):
             halting_probability += new_halted * remainders
             n_updates += still_running + new_halted
             update_weights = p * still_running + new_halted * remainders
-            new_target = self.coordinate_embedding(target, time_step)
+            new_target = self.pos_encoder(target, time_step)
             new_target = self.decoder_layer(
                 new_target,
                 memory,
