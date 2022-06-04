@@ -75,6 +75,8 @@ def unpack_batch(batch):
     src_pad_mask = ~batch["attention_mask"].bool()
     # extract target padding mask where it is -100
     tgt_pad_mask = target == -100
+    # replace -100 in target with 0
+    target[tgt_pad_mask] = 0
     return source, target, src_pad_mask, tgt_pad_mask
 
 
