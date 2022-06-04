@@ -6,4 +6,4 @@ python3 train_wmt14.py \
     --max_time_step 8 \
     --tr_log_interval 1 \
     --val_size 2 \
-    --val_interval 5 \
+    --val_interval 5
