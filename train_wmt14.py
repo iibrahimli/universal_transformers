@@ -358,7 +358,7 @@ if __name__ == "__main__":
                     src_txt = example["translation"]["de"]
                     tgt_txt = example["translation"]["en"]
                     translated = utils.translate_text(
-                        src_txt, ddp_model, tokenizer, device=device
+                        src_txt, model, tokenizer, device=device
                     )
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
@@ -376,7 +376,7 @@ if __name__ == "__main__":
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
                 bleu_score = bleu.compute()["bleu"]
                 demo_trans_text = utils.translate_text(
-                    demo_source_txt, ddp_model, tokenizer, device=device
+                    demo_source_txt, model, tokenizer, device=device
                 )
 
                 # log to W&B and console
