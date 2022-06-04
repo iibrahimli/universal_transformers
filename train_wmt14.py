@@ -34,7 +34,9 @@ def tokenize(examples, max_seq_len=100):
     return model_inputs
 
 
-def get_dataloaders(train_ds, val_ds, batch_size: int, max_seq_len: int, local_rank: int):
+def get_dataloaders(
+    train_ds, val_ds, batch_size: int, max_seq_len: int, local_rank: int
+):
     """Get train and val dataloaders"""
 
     def _get_dataloader_from_ds(ds, dist=False):
@@ -60,6 +62,7 @@ def get_dataloaders(train_ds, val_ds, batch_size: int, max_seq_len: int, local_r
             pin_memory=device.type == "cuda",
             sampler=sampler,
             collate_fn=data_collator,
+            num_workers=8,
         )
         return dl
 
@@ -232,9 +235,13 @@ if __name__ == "__main__":
 
     # Load datasets
     train_ds = load_dataset("wmt14", "de-en", split="train")
-    validation_ds = load_dataset("wmt14", "de-en", split=f"validation[:{args.val_size}]")
+    validation_ds = load_dataset(
+        "wmt14", "de-en", split=f"validation[:{args.val_size}]"
+    )
     if local_rank == 0:
-        L.log(f"Dataset loaded. Train size: {len(train_ds)}, Validation size: {len(validation_ds)}")
+        L.log(
+            f"Dataset loaded. Train size: {len(train_ds)}, Validation size: {len(validation_ds)}"
+        )
 
     # Prepare dataloaders
     train_dataloader, validation_dataloader = get_dataloaders(
@@ -284,7 +291,9 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.resume_checkpoint)
         step = checkpoint["step"]
         wandb_run_id = checkpoint["wandb_run_id"]
-        ddp_model.load_state_dict(checkpoint["model_state_dict"], map_location=map_location)
+        ddp_model.load_state_dict(
+            checkpoint["model_state_dict"], map_location=map_location
+        )
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.set_step(step)
         L.log(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
