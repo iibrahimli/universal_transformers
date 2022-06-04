@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from datasets import load_dataset
 from transformers import AutoTokenizer
+from transformers import DataCollatorForSeq2Seq
 from datasets import load_dataset, load_metric
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -29,30 +30,14 @@ import utils
 
 def tokenize(examples, max_seq_len=100):
     """Tokenize examples from dataset"""
-    src_texts = [e["de"] for e in examples["translation"]]
-    tgt_texts = [e["en"] for e in examples["translation"]]
-    model_inputs = tokenizer(
-        src_texts,
-        max_length=max_seq_len,
-        padding="longest",
-        truncation=True,
-        return_tensors="pt",
-    )
-    labels = tokenizer(
-        tgt_texts,
-        max_length=max_seq_len,
-        padding="longest",
-        truncation=True,
-        return_tensors="pt",
-    )
-    res = {}
-    res["input_ids"] = model_inputs["input_ids"]
-    res["attention_mask"] = ~model_inputs["attention_mask"].bool()
+    src = [ex["de"] for ex in examples["translation"]]
+    tgt = [ex["en"] for ex in examples["translation"]]
+    model_inputs = tokenizer(src, max_length=max_seq_len, truncation=True)
+    labels = tokenizer(tgt, max_length=max_seq_len, truncation=True)
 
-    labels, attn_mask = labels["input_ids"], labels["attention_mask"]
-    res["labels"] = labels
-    res["labels_attention_mask"] = ~attn_mask.bool()
-    return res
+    model_inputs["labels"] = labels["input_ids"]
+    model_inputs["attention_mask_labels"] = labels["attention_mask"]
+    return model_inputs
 
 
 def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank: int):
@@ -75,26 +60,32 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
 
         ds = ds.with_format(type="torch")
         sampler = DistributedSampler(ds) if dist else None
+        data_collator = DataCollatorForSeq2Seq(tokenizer, return_tensors="pt")
         dl = torch.utils.data.DataLoader(
-            ds, batch_size=batch_size, pin_memory=False, sampler=sampler
+            ds,
+            batch_size=batch_size,
+            pin_memory=False,
+            sampler=sampler,
+            collate_fn=data_collator,
         )
         return dl
 
     train_ds = load_dataset("wmt14", "de-en", split="train")
     validation_ds = load_dataset("wmt14", "de-en", split=f"validation[:{val_size}]")
-    test_ds = load_dataset("wmt14", "de-en", split="test")
+    # test_ds = load_dataset("wmt14", "de-en", split="test")
     train_dl = _get_dataloader_from_ds(train_ds, dist=True)
     validation_dl = _get_dataloader_from_ds(validation_ds)
-    test_dl = _get_dataloader_from_ds(test_ds)
+    # test_dl = _get_dataloader_from_ds(test_ds)
 
-    return train_dl, validation_dl, test_dl
+    return train_dl, validation_dl
 
 
 def unpack_batch(batch):
     source = batch["input_ids"]
     target = batch["labels"]
     src_pad_mask = ~batch["attention_mask"].bool()
-    tgt_pad_mask = ~batch["labels_attention_mask"].bool()
+    # extract target padding mask where it is -100
+    tgt_pad_mask = target == -100
     return source, target, src_pad_mask, tgt_pad_mask
 
 
@@ -249,7 +240,7 @@ if __name__ == "__main__":
     tokenizer.pad_token = tokenizer.eos_token
 
     # Prepare dataloaders
-    train_dataloader, validation_dataloader, test_dataloader = get_dataloaders(
+    train_dataloader, validation_dataloader = get_dataloaders(
         args.batch_size,
         val_size=args.val_size,
         max_seq_len=args.max_seq_len,
