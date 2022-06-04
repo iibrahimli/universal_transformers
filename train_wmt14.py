@@ -146,12 +146,6 @@ if __name__ == "__main__":
         help="Batch size",
     )
     parser.add_argument(
-        "--lr",
-        type=float,
-        default=None,
-        help="Learning rate (None for Vaswani schedule)",
-    )
-    parser.add_argument(
         "--val_size",
         type=int,
         default=500,
@@ -319,10 +313,7 @@ if __name__ == "__main__":
         tr_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
-        if args.lr is None:
-            lr = scheduler.step()
-        else:
-            lr = args.lr
+        lr = scheduler.step()
 
         # log training loss
         if step % args.tr_log_interval == 0:
