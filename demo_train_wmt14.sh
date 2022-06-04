@@ -7,4 +7,3 @@ python3 train_wmt14.py \
     --tr_log_interval 1 \
     --val_size 2 \
     --val_interval 5 \
-    --lr 0.001
