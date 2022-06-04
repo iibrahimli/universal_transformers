@@ -43,7 +43,7 @@ def tokenize(examples, max_seq_len=100):
 def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank: int):
     """Get train, val, and test dataloaders"""
 
-    def _get_dataloader_from_ds(ds, dist):
+    def _get_dataloader_from_ds(ds, dist=False):
         # wait for the main process to do mapping
         if local_rank != 0:
             torch.distributed.barrier()
