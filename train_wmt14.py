@@ -290,6 +290,7 @@ if __name__ == "__main__":
         L.log(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
 
     # Initialize W&B
+    os.environ["WANDB_START_METHOD"] = "thread"
     if local_rank == 0:
         wandb_entity = "universal-transformer"
         if wandb_run_id is None:
