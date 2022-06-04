@@ -281,16 +281,17 @@ if __name__ == "__main__":
         logger.info(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
 
     # Initialize W&B
+    wandb_entity = "universal-transformer"
     if wandb_run_id is None:
         # Not resuming from checkpoint
         wandb.init(
-            project=args.wandb_project, entity="universal-transformer", config=args
+            project=args.wandb_project, entity=wandb_entity, config=args
         )
     else:
         # Resume run
         wandb.init(
             project=args.wandb_project,
-            entity="universal-transformer",
+            entity=wandb_entity,
             id=wandb_run_id,
             config=args,
             resume="must",
