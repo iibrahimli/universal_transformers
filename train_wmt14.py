@@ -27,8 +27,8 @@ from model import UniversalTransformer
 import utils
 
 
-def encode(examples, max_seq_len=100):
-    """Encode examples from dataset"""
+def tokenize(examples, max_seq_len=100):
+    """Tokenize examples from dataset"""
     src_texts = [e["de"] for e in examples["translation"]]
     tgt_texts = [e["en"] for e in examples["translation"]]
     model_inputs = tokenizer(
@@ -55,15 +55,24 @@ def encode(examples, max_seq_len=100):
     return res
 
 
-def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int):
+def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank: int):
     """Get train, val, and test dataloaders"""
 
     def _get_dataloader_from_ds(ds, dist):
+        # wait for the main process to do mapping
+        if local_rank != 0:
+            torch.distributed.barrier()
+        
         ds = ds.map(
-            partial(encode, max_seq_len=max_seq_len),
+            partial(tokenize, max_seq_len=max_seq_len),
             batched=True,
             batch_size=batch_size * 10,
         )
+
+        # load results from main process
+        if local_rank == 0:
+            torch.distributed.barrier()
+
         ds = ds.with_format(type="torch")
         sampler = DistributedSampler(ds) if dist else None
         dl = torch.utils.data.DataLoader(
@@ -71,8 +80,6 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int):
         )
         return dl
 
-    # TODO: dataset sizes (take)
-    # streaming to avoid downloading the whole dataset
     train_ds = load_dataset("wmt14", "de-en", split="train", streaming=True)
     validation_ds = load_dataset("wmt14", "de-en", split="validation", streaming=True)
     test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(
@@ -248,6 +255,7 @@ if __name__ == "__main__":
         args.batch_size,
         val_size=args.val_size,
         max_seq_len=args.max_seq_len,
+        local_rank=local_rank
     )
 
     # Demo sentence to try to translate throughout training
