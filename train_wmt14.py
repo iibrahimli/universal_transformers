@@ -16,9 +16,7 @@ import argparse
 import wandb
 import torch
 import torch.nn as nn
-import torch.distributed as dist
 from datasets import load_dataset
-import torch.multiprocessing as mp
 from transformers import AutoTokenizer
 from datasets import load_dataset, load_metric
 from torch.utils.data.distributed import DistributedSampler
@@ -27,10 +25,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from model import UniversalTransformer
 import utils
-
-
-def setup(rank: int, world_size: int):
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
 
 def encode(examples, max_seq_len=100):
@@ -61,9 +55,7 @@ def encode(examples, max_seq_len=100):
     return res
 
 
-def get_dataloaders(
-    batch_size: int, val_size: int, max_seq_len: int, world_size: int, rank: int
-):
+def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int):
     """Get train, val, and test dataloaders"""
 
     def _get_dataloader_from_ds(ds, dist):
@@ -73,15 +65,7 @@ def get_dataloaders(
             batch_size=batch_size * 10,
         )
         ds = ds.with_format(type="torch")
-        sampler = (
-            DistributedSampler(
-                ds,
-                num_replicas=world_size,
-                rank=rank,
-            )
-            if dist
-            else None
-        )
+        sampler = DistributedSampler(ds) if dist else None
         dl = torch.utils.data.DataLoader(
             ds, batch_size=batch_size, pin_memory=False, sampler=sampler
         )
@@ -230,6 +214,8 @@ if __name__ == "__main__":
         help="PyTorch device to use. None to use GPU if available else CPU",
     )
     args = parser.parse_args()
+
+    torch.distributed.init_process_group(backend="nccl")
 
     # get local rank
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -386,7 +372,9 @@ if __name__ == "__main__":
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
-                    bleu.add(predictions=translated.split(), references=[tgt_txt.split()])
+                    bleu.add(
+                        predictions=translated.split(), references=[tgt_txt.split()]
+                    )
 
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
                 bleu_score = bleu.compute()["bleu"]
