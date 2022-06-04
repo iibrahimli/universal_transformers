@@ -1,10 +1,5 @@
 """
 Train UT on the WMT14 de-en translation task.
-
-TODO:
- - recheck shapes in docstrings
- - early stopping ?
- - make it faster
 """
 
 import os
@@ -39,8 +34,8 @@ def tokenize(examples, max_seq_len=100):
     return model_inputs
 
 
-def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank: int):
-    """Get train, val, and test dataloaders"""
+def get_dataloaders(train_ds, val_ds, batch_size: int, max_seq_len: int, local_rank: int):
+    """Get train and val dataloaders"""
 
     def _get_dataloader_from_ds(ds, dist=False):
         # wait for the main process to do mapping
@@ -53,13 +48,10 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
             remove_columns=ds.column_names,
         )
 
-        print(ds)
-
         # load results from main process
         if local_rank == 0:
             torch.distributed.barrier()
 
-        # ds = ds.with_format(type="torch")
         sampler = DistributedSampler(ds) if dist else None
         data_collator = DataCollatorForSeq2Seq(tokenizer, return_tensors="pt")
         dl = torch.utils.data.DataLoader(
@@ -71,12 +63,8 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
         )
         return dl
 
-    train_ds = load_dataset("wmt14", "de-en", split="train")
-    validation_ds = load_dataset("wmt14", "de-en", split=f"validation[:{val_size}]")
-    # test_ds = load_dataset("wmt14", "de-en", split="test")
     train_dl = _get_dataloader_from_ds(train_ds, dist=True)
-    validation_dl = _get_dataloader_from_ds(validation_ds)
-    # test_dl = _get_dataloader_from_ds(test_ds)
+    validation_dl = _get_dataloader_from_ds(val_ds)
 
     return train_dl, validation_dl
 
@@ -240,19 +228,23 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
+    # Load datasets
+    train_ds = load_dataset("wmt14", "de-en", split="train")
+    validation_ds = load_dataset("wmt14", "de-en", split=f"validation[:{args.val_size}]")
+
     # Prepare dataloaders
     train_dataloader, validation_dataloader = get_dataloaders(
-        args.batch_size,
-        val_size=args.val_size,
+        train_ds,
+        validation_ds,
+        batch_size=args.batch_size,
         max_seq_len=args.max_seq_len,
         local_rank=local_rank,
     )
 
     # Demo sentence to try to translate throughout training
-    demo_sample = next(iter(validation_dataloader))
-    demo_source_txt = demo_sample["translation"]["de"][2]
-    demo_target_txt = demo_sample["translation"]["en"][2]
-    demo_source_txt, demo_target_txt
+    demo_sample = validation_ds[2]
+    demo_source_txt = demo_sample["translation"]["de"]
+    demo_target_txt = demo_sample["translation"]["en"]
 
     # Initialize model
     model = UniversalTransformer(
