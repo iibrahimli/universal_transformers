@@ -302,10 +302,11 @@ if __name__ == "__main__":
             )
         wandb.watch(model, log_freq=100)
 
-    L.log("Using args: {")
-    for k, v in wandb.config.items():
-        L.log(f"    {k}: {v}")
-    L.log("}\n")
+    if local_rank == 0:
+        L.log("Using args: {")
+        for k, v in wandb.config.items():
+            L.log(f"    {k}: {v}")
+        L.log("}\n")
 
     # Training loop
     for batch in cycle(train_dataloader):
