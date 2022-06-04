@@ -7,28 +7,30 @@ TODO:
  - make it faster
 """
 
-import sys
+import os
 from pathlib import Path
 from itertools import cycle
 from functools import partial
-from argparse import ArgumentParser
+import argparse
 
 import wandb
 import torch
 import torch.nn as nn
-from loguru import logger
+import torch.distributed as dist
 from datasets import load_dataset
+import torch.multiprocessing as mp
 from transformers import AutoTokenizer
 from datasets import load_dataset, load_metric
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 
 from model import UniversalTransformer
 import utils
 
 
-# configure logger
-logger.remove()
-log_fmt = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | {message}"
-logger.add(sys.stderr, format=log_fmt)
+def setup(rank: int, world_size: int):
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
 
 def encode(examples, max_seq_len=100):
@@ -59,18 +61,29 @@ def encode(examples, max_seq_len=100):
     return res
 
 
-def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int = 100):
+def get_dataloaders(
+    batch_size: int, val_size: int, max_seq_len: int, world_size: int, rank: int
+):
     """Get train, val, and test dataloaders"""
 
-    def _get_dataloader_from_ds(ds):
+    def _get_dataloader_from_ds(ds, dist):
         ds = ds.map(
             partial(encode, max_seq_len=max_seq_len),
             batched=True,
             batch_size=batch_size * 10,
         )
         ds = ds.with_format(type="torch")
+        sampler = (
+            DistributedSampler(
+                ds,
+                num_replicas=world_size,
+                rank=rank,
+            )
+            if dist
+            else None
+        )
         dl = torch.utils.data.DataLoader(
-            ds, batch_size=batch_size, pin_memory=device.type == "cuda"
+            ds, batch_size=batch_size, pin_memory=False, sampler=sampler
         )
         return dl
 
@@ -81,7 +94,7 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int = 100):
     test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(
         val_size
     )
-    train_dl = _get_dataloader_from_ds(train_ds)
+    train_dl = _get_dataloader_from_ds(train_ds, dist=True)
     validation_dl = _get_dataloader_from_ds(validation_ds)
     test_dl = _get_dataloader_from_ds(test_ds)
 
@@ -120,7 +133,9 @@ def batch_loss_step(model, batch, loss_fn, device):
 if __name__ == "__main__":
 
     # Parse arguments
-    parser = ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--resume_checkpoint",
         type=str,
@@ -216,19 +231,27 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # get local rank
+    local_rank = int(os.environ["LOCAL_RANK"])
+    print("Started process with local_rank:", local_rank)
+
+    # get logger
+    L = utils.Logger(local_rank)
+
     if args.device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device(
+            f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu"
+        )
     else:
         device = args.device
         if device.type == "cuda" and not torch.cuda.is_available():
-            logger.warning(
-                f"Provided device {device}, but it is not available. Exiting."
-            )
+            L.log(f"Provided device {device}, but it is not available. Exiting.")
             exit(1)
-    logger.info(f"Using device: {device}")
+    L.log(f"Using device: {device}")
 
     # Create checkpoints directory if it doesn't exist
-    Path(args.checkpoints_path).mkdir(parents=True, exist_ok=True)
+    if local_rank == 0:
+        Path(args.checkpoints_path).mkdir(parents=True, exist_ok=True)
 
     # Load tokenizer (GPT-2 uses BPE)
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -266,42 +289,47 @@ if __name__ == "__main__":
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=1.0
     )
 
+    # DDP
+    model = torch.nn.parallel.DistributedDataParallel(
+        model, device_ids=[local_rank], output_device=local_rank
+    )
+
     # Step is incremented at the start of iteration, becomes 0
     step = -1
     wandb_run_id = None
 
     # Resume from checkpoint if needed
     if args.resume_checkpoint is not None:
+        map_location = {"cuda:0": f"cuda:{local_rank}"}
         checkpoint = torch.load(args.resume_checkpoint)
         step = checkpoint["step"]
         wandb_run_id = checkpoint["wandb_run_id"]
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(checkpoint["model_state_dict"], map_location=map_location)
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.set_step(step)
-        logger.info(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
+        L.log(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
 
     # Initialize W&B
-    wandb_entity = "universal-transformer"
-    if wandb_run_id is None:
-        # Not resuming from checkpoint
-        wandb.init(
-            project=args.wandb_project, entity=wandb_entity, config=args
-        )
-    else:
-        # Resume run
-        wandb.init(
-            project=args.wandb_project,
-            entity=wandb_entity,
-            id=wandb_run_id,
-            config=args,
-            resume="must",
-        )
-    wandb.watch(model, log_freq=100)
+    if local_rank == 0:
+        wandb_entity = "universal-transformer"
+        if wandb_run_id is None:
+            # Not resuming from checkpoint
+            wandb.init(project=args.wandb_project, entity=wandb_entity, config=args)
+        else:
+            # Resume run
+            wandb.init(
+                project=args.wandb_project,
+                entity=wandb_entity,
+                id=wandb_run_id,
+                config=args,
+                resume="must",
+            )
+        wandb.watch(model, log_freq=100)
 
-    logger.info("Using args: {")
+    L.log("Using args: {")
     for k, v in wandb.config.items():
-        logger.info(f"    {k}: {v}")
-    logger.info("}\n")
+        L.log(f"    {k}: {v}")
+    L.log("}\n")
 
     # Training loop
     for batch in cycle(train_dataloader):
@@ -316,66 +344,69 @@ if __name__ == "__main__":
         optimizer.step()
         lr = scheduler.step()
 
-        # log training loss
-        if step % args.tr_log_interval == 0:
-            wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=step)
-            logger.info(f"[{step}] tr_loss: {tr_loss.item():.4f}")
+        # Logging, validation, saving checkpoints
+        if local_rank == 0:
 
-        # save checkpoint
-        if step % args.save_interval == 0:
-            cp_path = Path(args.checkpoints_path) / f"latest.pt"
-            torch.save(
-                {
-                    "step": step,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "wandb_run_id": wandb.run.id,
-                },
-                cp_path,
-            )
-            logger.info(f"Saved checkpoint to {cp_path}")
+            # log training loss
+            if step % args.tr_log_interval == 0:
+                wandb.log({"tr": {"loss": tr_loss.item()}, "lr": lr}, step=step)
+                L.log(f"[{step}] tr_loss: {tr_loss.item():.4f}")
 
-        # validate & log
-        if step % args.val_interval == 0:
-            model.eval()
-            val_losses = []
-            bleu = load_metric("bleu")
-
-            for batch in validation_dataloader:
-                with torch.no_grad():
-                    out, val_loss = batch_loss_step(model, batch, loss, device)
-                    val_losses.append(val_loss.item())
-
-                # compute BLEU on first sample from each batch
-                src_txt = batch["translation"]["de"][0]
-                tgt_txt = batch["translation"]["en"][0]
-                translated = utils.translate_text(
-                    src_txt, model, tokenizer, device=device
+            # save checkpoint
+            if step % args.save_interval == 0:
+                cp_path = Path(args.checkpoints_path) / f"latest.pt"
+                torch.save(
+                    {
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "wandb_run_id": wandb.run.id,
+                    },
+                    cp_path,
                 )
-                if len(translated) == 0:
-                    # to prevent division by zero in BLEU with empty string
-                    translated = "0"
-                bleu.add(predictions=translated.split(), references=[tgt_txt.split()])
+                L.log(f"Saved checkpoint to {cp_path}")
 
-            val_loss_value = torch.mean(torch.tensor(val_losses)).item()
-            bleu_score = bleu.compute()["bleu"]
-            demo_trans_text = utils.translate_text(
-                demo_source_txt, model, tokenizer, device=device
-            )
+            # validate & log
+            if step % args.val_interval == 0:
+                model.eval()
+                val_losses = []
+                bleu = load_metric("bleu")
 
-            # log to W&B and console
-            wandb.log(
-                {
-                    "val": {"loss": val_loss_value, "bleu": bleu_score},
-                    "demo_translated": wandb.Html(demo_trans_text),
-                },
-                step=step,
-            )
-            logger.info(
-                f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
-            )
-            logger.info("")
-            logger.info(f"DE: {demo_source_txt}")
-            logger.info(f"EN: {demo_target_txt}")
-            logger.info(f"output: {demo_trans_text}")
-            logger.info("")
+                for batch in validation_dataloader:
+                    with torch.no_grad():
+                        out, val_loss = batch_loss_step(model, batch, loss, device)
+                        val_losses.append(val_loss.item())
+
+                    # compute BLEU on first sample from each batch
+                    src_txt = batch["translation"]["de"][0]
+                    tgt_txt = batch["translation"]["en"][0]
+                    translated = utils.translate_text(
+                        src_txt, model, tokenizer, device=device
+                    )
+                    if len(translated) == 0:
+                        # to prevent division by zero in BLEU with empty string
+                        translated = "0"
+                    bleu.add(predictions=translated.split(), references=[tgt_txt.split()])
+
+                val_loss_value = torch.mean(torch.tensor(val_losses)).item()
+                bleu_score = bleu.compute()["bleu"]
+                demo_trans_text = utils.translate_text(
+                    demo_source_txt, model, tokenizer, device=device
+                )
+
+                # log to W&B and console
+                wandb.log(
+                    {
+                        "val": {"loss": val_loss_value, "bleu": bleu_score},
+                        "demo_translated": wandb.Html(demo_trans_text),
+                    },
+                    step=step,
+                )
+                L.log(
+                    f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
+                )
+                L.log("")
+                L.log(f"DE: {demo_source_txt}")
+                L.log(f"EN: {demo_target_txt}")
+                L.log(f"output: {demo_trans_text}")
+                L.log("")
