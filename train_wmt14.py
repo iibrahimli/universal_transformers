@@ -53,6 +53,8 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
             remove_columns=ds.column_names,
         )
 
+        print(ds)
+
         # load results from main process
         if local_rank == 0:
             torch.distributed.barrier()
