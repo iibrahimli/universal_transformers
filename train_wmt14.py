@@ -59,7 +59,7 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
         if local_rank == 0:
             torch.distributed.barrier()
 
-        ds = ds.with_format(type="torch")
+        # ds = ds.with_format(type="torch")
         sampler = DistributedSampler(ds) if dist else None
         data_collator = DataCollatorForSeq2Seq(tokenizer, return_tensors="pt")
         dl = torch.utils.data.DataLoader(
