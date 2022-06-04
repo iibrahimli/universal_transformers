@@ -97,7 +97,7 @@ def batch_loss_step(model, batch, loss_fn, device):
         source_padding_mask=src_pad_mask,
         target_padding_mask=shifted_tgt_pad_mask,
     )
-    loss_value = loss_fn(out, target)
+    loss_value = loss_fn(out.view(-1, out.shape[-1]), target.view(-1))
     return out, loss_value
 
 
