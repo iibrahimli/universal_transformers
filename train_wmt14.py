@@ -36,7 +36,6 @@ def tokenize(examples, max_seq_len=100):
     labels = tokenizer(tgt, max_length=max_seq_len, truncation=True)
 
     model_inputs["labels"] = labels["input_ids"]
-    model_inputs["attention_mask_labels"] = labels["attention_mask"]
     return model_inputs
 
 
