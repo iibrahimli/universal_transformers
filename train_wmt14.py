@@ -97,7 +97,7 @@ def batch_loss_step(model, batch, loss_fn, device):
         source_padding_mask=src_pad_mask,
         target_padding_mask=shifted_tgt_pad_mask,
     )
-    loss_value = loss_fn(out.view(-1, model.target_vocab_size), target.view(-1))
+    loss_value = loss_fn(out, target)
     return out, loss_value
 
 
@@ -233,6 +233,8 @@ if __name__ == "__main__":
     # Load datasets
     train_ds = load_dataset("wmt14", "de-en", split="train")
     validation_ds = load_dataset("wmt14", "de-en", split=f"validation[:{args.val_size}]")
+    if local_rank == 0:
+        L.log(f"Dataset loaded. Train size: {len(train_ds)}, Validation size: {len(validation_ds)}")
 
     # Prepare dataloaders
     train_dataloader, validation_dataloader = get_dataloaders(
@@ -268,7 +270,7 @@ if __name__ == "__main__":
     )
 
     # DDP
-    model = torch.nn.parallel.DistributedDataParallel(
+    ddp_model = torch.nn.parallel.DistributedDataParallel(
         model, device_ids=[local_rank], output_device=local_rank
     )
 
@@ -282,7 +284,7 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.resume_checkpoint)
         step = checkpoint["step"]
         wandb_run_id = checkpoint["wandb_run_id"]
-        model.load_state_dict(checkpoint["model_state_dict"], map_location=map_location)
+        ddp_model.load_state_dict(checkpoint["model_state_dict"], map_location=map_location)
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.set_step(step)
         L.log(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
@@ -302,7 +304,7 @@ if __name__ == "__main__":
                 config=args,
                 resume="must",
             )
-        wandb.watch(model, log_freq=100)
+        wandb.watch(ddp_model, log_freq=100)
 
     if local_rank == 0:
         L.log("Using args: {")
@@ -313,13 +315,13 @@ if __name__ == "__main__":
     # Training loop
     for batch in cycle(train_dataloader):
         step += 1
-        model.train()
+        ddp_model.train()
         optimizer.zero_grad()
 
         # Weight update
-        out, tr_loss = batch_loss_step(model, batch, loss, device)
+        out, tr_loss = batch_loss_step(ddp_model, batch, loss, device)
         tr_loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        nn.utils.clip_grad_norm_(ddp_model.parameters(), 1.0)
         optimizer.step()
         lr = scheduler.step()
 
@@ -337,7 +339,7 @@ if __name__ == "__main__":
                 torch.save(
                     {
                         "step": step,
-                        "model_state_dict": model.state_dict(),
+                        "model_state_dict": ddp_model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "wandb_run_id": wandb.run.id,
                     },
@@ -347,20 +349,20 @@ if __name__ == "__main__":
 
             # validate & log
             if step % args.val_interval == 0:
-                model.eval()
+                ddp_model.eval()
                 val_losses = []
                 bleu = load_metric("bleu")
 
                 for batch in validation_dataloader:
                     with torch.no_grad():
-                        out, val_loss = batch_loss_step(model, batch, loss, device)
+                        out, val_loss = batch_loss_step(ddp_model, batch, loss, device)
                         val_losses.append(val_loss.item())
 
                     # compute BLEU on first sample from each batch
                     src_txt = batch["translation"]["de"][0]
                     tgt_txt = batch["translation"]["en"][0]
                     translated = utils.translate_text(
-                        src_txt, model, tokenizer, device=device
+                        src_txt, ddp_model, tokenizer, device=device
                     )
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
@@ -372,7 +374,7 @@ if __name__ == "__main__":
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
                 bleu_score = bleu.compute()["bleu"]
                 demo_trans_text = utils.translate_text(
-                    demo_source_txt, model, tokenizer, device=device
+                    demo_source_txt, ddp_model, tokenizer, device=device
                 )
 
                 # log to W&B and console
