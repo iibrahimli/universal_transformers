@@ -18,4 +18,5 @@ class Logger:
         self.loguru_logger = logger
     
     def log(self, *args, **kwargs):
-        self.loguru_logger.info(*args, **kwargs)
+        if self.local_rank == 0:
+            self.loguru_logger.info(*args, **kwargs)
