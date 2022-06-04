@@ -353,14 +353,10 @@ if __name__ == "__main__":
                 val_losses = []
                 bleu = load_metric("bleu")
 
-                for batch in validation_dataloader:
-                    with torch.no_grad():
-                        out, val_loss = batch_loss_step(ddp_model, batch, loss, device)
-                        val_losses.append(val_loss.item())
-
-                    # compute BLEU on first sample from each batch
-                    src_txt = batch["translation"]["de"][0]
-                    tgt_txt = batch["translation"]["en"][0]
+                # BLEU
+                for example in validation_ds[:10]:
+                    src_txt = example["translation"]["de"]
+                    tgt_txt = example["translation"]["en"]
                     translated = utils.translate_text(
                         src_txt, ddp_model, tokenizer, device=device
                     )
@@ -370,6 +366,12 @@ if __name__ == "__main__":
                     bleu.add(
                         predictions=translated.split(), references=[tgt_txt.split()]
                     )
+
+                # validation loss
+                with torch.no_grad():
+                    for batch in validation_dataloader:
+                        out, val_loss = batch_loss_step(ddp_model, batch, loss, device)
+                        val_losses.append(val_loss.item())
 
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
                 bleu_score = bleu.compute()["bleu"]
