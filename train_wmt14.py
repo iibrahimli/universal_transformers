@@ -57,7 +57,7 @@ def get_dataloaders(train_ds, val_ds, batch_size: int, max_seq_len: int, local_r
         dl = torch.utils.data.DataLoader(
             ds,
             batch_size=batch_size,
-            pin_memory=False,
+            pin_memory=device.type == "cuda",
             sampler=sampler,
             collate_fn=data_collator,
         )
