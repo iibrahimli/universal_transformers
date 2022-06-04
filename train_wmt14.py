@@ -62,11 +62,11 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
         # wait for the main process to do mapping
         if local_rank != 0:
             torch.distributed.barrier()
-        
+
         ds = ds.map(
             partial(tokenize, max_seq_len=max_seq_len),
             batched=True,
-            batch_size=batch_size * 10,
+            remove_columns=ds.column_names,
         )
 
         # load results from main process
@@ -80,11 +80,9 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
         )
         return dl
 
-    train_ds = load_dataset("wmt14", "de-en", split="train", streaming=True)
-    validation_ds = load_dataset("wmt14", "de-en", split="validation", streaming=True)
-    test_ds = load_dataset("wmt14", "de-en", split="test", streaming=True).take(
-        val_size
-    )
+    train_ds = load_dataset("wmt14", "de-en", split="train")
+    validation_ds = load_dataset("wmt14", "de-en", split=f"validation[:{val_size}]")
+    test_ds = load_dataset("wmt14", "de-en", split="test")
     train_dl = _get_dataloader_from_ds(train_ds, dist=True)
     validation_dl = _get_dataloader_from_ds(validation_ds)
     test_dl = _get_dataloader_from_ds(test_ds)
@@ -95,8 +93,8 @@ def get_dataloaders(batch_size: int, val_size: int, max_seq_len: int, local_rank
 def unpack_batch(batch):
     source = batch["input_ids"]
     target = batch["labels"]
-    src_pad_mask = batch["attention_mask"]
-    tgt_pad_mask = batch["labels_attention_mask"]
+    src_pad_mask = ~batch["attention_mask"].bool()
+    tgt_pad_mask = ~batch["labels_attention_mask"].bool()
     return source, target, src_pad_mask, tgt_pad_mask
 
 
@@ -255,7 +253,7 @@ if __name__ == "__main__":
         args.batch_size,
         val_size=args.val_size,
         max_seq_len=args.max_seq_len,
-        local_rank=local_rank
+        local_rank=local_rank,
     )
 
     # Demo sentence to try to translate throughout training
