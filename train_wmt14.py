@@ -354,7 +354,8 @@ if __name__ == "__main__":
                 bleu = load_metric("bleu")
 
                 # BLEU
-                for example in validation_ds[:10]:
+                for i_ex in range(10):
+                    example = validation_ds[i_ex]
                     src_txt = example["translation"]["de"]
                     tgt_txt = example["translation"]["en"]
                     translated = utils.translate_text(
