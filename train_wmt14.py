@@ -279,7 +279,7 @@ if __name__ == "__main__":
 
     # Training extras
     loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.98))
     scheduler = utils.CustomLRScheduler(
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=1.0
     )
