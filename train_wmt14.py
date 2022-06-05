@@ -287,7 +287,9 @@ if __name__ == "__main__":
     ).to(device)
 
     # Training extras
-    loss = torch.nn.CrossEntropyLoss(reduction="none", label_smoothing=args.label_smoothing).to(device)
+    loss = torch.nn.CrossEntropyLoss(
+        reduction="none", label_smoothing=args.label_smoothing
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.98))
     scheduler = utils.CustomLRScheduler(
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=1.0
@@ -305,12 +307,10 @@ if __name__ == "__main__":
     # Resume from checkpoint if needed
     if args.resume_checkpoint is not None:
         map_location = {"cuda:0": f"cuda:{local_rank}"}
-        checkpoint = torch.load(args.resume_checkpoint)
+        checkpoint = torch.load(args.resume_checkpoint, map_location=map_location)
         step = checkpoint["step"]
         wandb_run_id = checkpoint["wandb_run_id"]
-        ddp_model.module.load_state_dict(
-            checkpoint["model_state_dict"], map_location=map_location
-        )
+        ddp_model.module.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.set_step(step)
         L.log(f"Resumed from checkpoint {args.resume_checkpoint} (step {step})")
