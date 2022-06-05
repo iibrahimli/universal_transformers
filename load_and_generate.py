@@ -65,13 +65,11 @@ if __name__ == "__main__":
 
     # Load checkpoint
     checkpoint = torch.load(args.checkpoint, map_location=device)
+    model_state_dict = checkpoint["model_state_dict"]
     # test if saved model was DDP
-    if any(k.startswith("module.") for k in checkpoint["model_state_dict"].keys()):
-        checkpoint = {
-            k.replace("module.", ""): v
-            for k, v in checkpoint["model_state_dict"].items()
-        }
-    model.load_state_dict(checkpoint["model_state_dict"])
+    if any(k.startswith("module.") for k in model_state_dict.keys()):
+        model_state_dict = {k.replace("module.", ""): v for k, v in model_state_dict.items()}
+    model.load_state_dict(model_state_dict)
     model.eval()
 
     # Generate output
