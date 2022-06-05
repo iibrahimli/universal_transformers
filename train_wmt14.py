@@ -366,20 +366,21 @@ if __name__ == "__main__":
                 bleu = load_metric("bleu")
 
                 # BLEU
-                for i_ex in range(10):
-                    example = validation_ds[i_ex]
-                    src_txt = example["translation"]["de"]
-                    tgt_txt = example["translation"]["en"]
-                    translated = utils.translate_text(
-                        src_txt, model, tokenizer, device=device
-                    )
-                    if len(translated) == 0:
-                        # to prevent division by zero in BLEU with empty string
-                        translated = "0"
-                    bleu.add(
-                        predictions=translated.split(), references=[tgt_txt.split()]
-                    )
-                bleu_score = bleu.compute()["bleu"]
+                # for i_ex in range(10):
+                #     example = validation_ds[i_ex]
+                #     src_txt = example["translation"]["de"]
+                #     tgt_txt = example["translation"]["en"]
+                #     translated = utils.translate_text(
+                #         src_txt, model, tokenizer, device=device
+                #     )
+                #     if len(translated) == 0:
+                #         # to prevent division by zero in BLEU with empty string
+                #         translated = "0"
+                #     bleu.add(
+                #         predictions=translated.split(), references=[tgt_txt.split()]
+                #     )
+                # bleu_score = bleu.compute()["bleu"]
+                bleu_score = 0
 
                 # validation loss
                 with torch.no_grad():
