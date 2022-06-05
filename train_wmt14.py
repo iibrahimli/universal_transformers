@@ -105,7 +105,7 @@ def batch_loss_step(model, batch, loss_fn, device):
     loss_tensor = loss_fn(out.view(-1, out.shape[-1]), target.view(-1))
 
     # only keep loss for non-padded tokens
-    loss_tensor = loss_tensor[~tgt_pad_mask]
+    loss_tensor = loss_tensor[~tgt_pad_mask.view(-1)]
     loss_value = loss_tensor.mean()
 
     # delete tensors to free memory
