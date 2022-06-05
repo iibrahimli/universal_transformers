@@ -90,18 +90,12 @@ def batch_loss_step(model, batch, loss_fn, device):
         target, tgt_pad_mask, tokenizer.eos_token_id
     )
 
-    print("DEBUG: source:", source[:2])
-    print("DEBUG: target:", target[:2])
-    print("DEBUG: src_pad_mask:", src_pad_mask[:2])
-    print("DEBUG: tgt_pad_mask:", tgt_pad_mask[:2])
-    print("DEBUG: shifted_target:", shifted_target[:2])
-    print("DEBUG: shifted_tgt_pad_mask:", shifted_tgt_pad_mask[:2])
-
     source = source.to(device)
     target = target.to(device)
     shifted_target = shifted_target.to(device)
     src_pad_mask = src_pad_mask.to(device)
     shifted_tgt_pad_mask = shifted_tgt_pad_mask.to(device)
+    
     out = model(
         source,
         shifted_target,
