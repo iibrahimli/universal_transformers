@@ -365,7 +365,7 @@ if __name__ == "__main__":
                         "model_state_dict": model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "wandb_run_id": wandb.run.id,
-                        "config": wandb.config,
+                        "config": vars(args),
                     },
                     cp_path,
                 )
