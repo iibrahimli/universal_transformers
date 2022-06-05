@@ -308,7 +308,7 @@ if __name__ == "__main__":
         checkpoint = torch.load(args.resume_checkpoint)
         step = checkpoint["step"]
         wandb_run_id = checkpoint["wandb_run_id"]
-        ddp_model.load_state_dict(
+        ddp_model.module.load_state_dict(
             checkpoint["model_state_dict"], map_location=map_location
         )
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -366,7 +366,7 @@ if __name__ == "__main__":
                 torch.save(
                     {
                         "step": step,
-                        "model_state_dict": model.state_dict(),
+                        "model_state_dict": ddp_model.module.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "wandb_run_id": wandb.run.id,
                         "config": vars(args),
