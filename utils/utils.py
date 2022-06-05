@@ -65,6 +65,9 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
     """
     Translate a text.
     """
+    # add EOS token if not already present
+    if not source.endswith(tokenizer.eos_token):
+        source += tokenizer.eos_token
     input_ids = tokenizer(
         source,
         truncation=True,
