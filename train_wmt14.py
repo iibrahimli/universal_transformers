@@ -30,6 +30,10 @@ def tokenize(examples, max_seq_len=100):
     model_inputs = tokenizer(src, max_length=max_seq_len, truncation=True)
     labels = tokenizer(tgt, max_length=max_seq_len, truncation=True)
 
+    # add EOS token to end of source and target
+    model_inputs = [x + [tokenizer.eos_token_id] for x in model_inputs["input_ids"]]
+    model_inputs = [x + [tokenizer.eos_token_id] for x in labels["input_ids"]]
+
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
 
