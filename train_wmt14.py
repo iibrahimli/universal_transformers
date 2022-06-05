@@ -102,7 +102,11 @@ def batch_loss_step(model, batch, loss_fn, device):
         source_padding_mask=src_pad_mask,
         target_padding_mask=shifted_tgt_pad_mask,
     )
-    loss_value = loss_fn(out.view(-1, out.shape[-1]), target.view(-1))
+    loss_tensor = loss_fn(out.view(-1, out.shape[-1]), target.view(-1))
+
+    # only keep loss for non-padded tokens
+    loss_tensor = loss_tensor[~tgt_pad_mask]
+    loss_value = loss_tensor.mean()
 
     # delete tensors to free memory
     del (
@@ -283,7 +287,7 @@ if __name__ == "__main__":
     ).to(device)
 
     # Training extras
-    loss = torch.nn.CrossEntropyLoss(label_smoothing=args.label_smoothing).to(device)
+    loss = torch.nn.CrossEntropyLoss(reduction="none", label_smoothing=args.label_smoothing).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.98))
     scheduler = utils.CustomLRScheduler(
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=1.0
