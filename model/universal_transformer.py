@@ -122,14 +122,14 @@ class UniversalTransformer(nn.Module):
         target = self.target_tok_emb(target)
 
         # get autoregressive mask (no future lookahead)
-        target_mask = self.generate_subsequent_mask(target)  # TODO (Cati) aufräumen
+        target_mask = self.generate_subsequent_mask(target)
 
         # run encoder and decoder
         memory = self.forward_encoder(source, source_padding_mask)
         output = self.forward_decoder(
             memory, target, target_mask, source_padding_mask, target_padding_mask
         )
-        output = self.generator(output)  # TODO (Cati) aufräumen
+        output = self.generator(output)
         return output
 
     def forward_encoder(self, src: Tensor, src_padding_mask: Tensor = None):

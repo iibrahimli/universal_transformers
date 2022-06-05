@@ -1,5 +1,9 @@
-"""Neural GPU for Learning Algorithms."""
+"""Train UT on Algorithmic Tasks"""
 
+import os
+from pathlib import Path
+from itertools import cycle
+from functools import partial
 
 import wandb
 import torch
@@ -19,6 +23,7 @@ print(f"Using device: {DEVICE}")
 
 
 def calc_acc(outputs, targets, tgt_padding_mask):
+    """Calculate accuracy for a batch"""
     if outputs.shape[-1] == 1:
         outputs = np.round(outputs.detach().numpy())
     else:
@@ -46,12 +51,11 @@ def batch_loss_step(model, batch, loss_fn, device):
     return out, loss_value
 
 
-def train_for_a_step(model, length, batch_size, data_generator, step):
+def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_interval):
     batch = data_generator.get_batch(length, batch_size)
     model.train()
     optimizer.zero_grad()
 
-    # Weight update
     out, tr_loss = batch_loss_step(model, batch, loss, DEVICE)
     tr_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -62,7 +66,7 @@ def train_for_a_step(model, length, batch_size, data_generator, step):
     tgt_padding_maks = batch[3]
     acc = calc_acc(out, targets, tgt_padding_maks)
 
-    if step % args.tr_log_interval == 0:
+    if step % tr_log_interval == 0:
          wandb.log({"tr": {"loss": tr_loss.item(), "accuracy": acc}, "lr": lr}, step=step)
 
 
@@ -70,38 +74,31 @@ def infer_for_a_step(model, batch):
     model.eval()
     with torch.no_grad():
         out, eval_loss = batch_loss_step(model, batch, loss, DEVICE)
-
     return out, eval_loss
 
-def single_test(model, batch):
-    """Test model on test data of length l using the given session."""
-    out, eval_loss = infer_for_a_step(model, batch)
-    targets = batch[1]
-    tgt_padding_maks = batch[3]
-    acc = calc_acc(out, targets, tgt_padding_maks)
-    return acc
 
-
-def run_evaluation(model, length, batch_size, data_generator, test_steps, step=0):
+def run_evaluation(model, l, batch_size, data_generator, val_steps, step=0):
+    """Test model on test data of length l"""
     accuracy = []
-    for step in range(test_steps):
-        batch = data_generator.get_batch(length, batch_size)
-        acc = single_test(model, batch)
+    for step in range(val_steps):
+        batch = data_generator.get_batch(l, batch_size)
+        out, eval_loss = infer_for_a_step(model, batch)
+        targets = batch[1]
+        tgt_padding_maks = batch[3]
+        acc = calc_acc(out, targets, tgt_padding_maks)
         accuracy.append(acc)
-    wandb.log({"test": {"accuracy": np.mean(accuracy)}})
+    wandb.log({"val": {"accuracy": np.mean(accuracy)}})
 
     return accuracy
 
-
-
-def train_loop(model, train_length, test_length, data_generator, batch_size, train_steps, test_steps):
+def train_loop(model, train_length, val_length, data_generator, batch_size, train_steps, val_steps, tr_log_interval, val_interval):
     # Main training loop.
     for step in range(train_steps):
-        train_for_a_step(model, train_length, batch_size, data_generator, step)
+        train_for_a_step(model, train_length, batch_size, data_generator, step, tr_log_interval)
         print(step)
         # Run evaluation.
-        if step > 0 and step % 10 == 0:
-            accuracy = run_evaluation(model, test_length, batch_size, data_generator, test_steps, step)
+        if step > 0 and step % val_interval == 0:
+            accuracy = run_evaluation(model, val_length, batch_size, data_generator, val_steps, step)
 
 
 
@@ -150,13 +147,19 @@ if __name__ == "__main__":
         "--train_steps",
         type=int,
         default=1000,
-        help="number of training steps"
+        help="Number of training steps"
     )
     parser.add_argument(
-        "--test_steps",
+        "--val_steps",
+        type=int,
+        default=50,
+        help="Number of validation steps"
+    )
+    parser.add_argument(
+        "--val_interval",
         type=int,
         default=100,
-        help="number of test steps"
+        help="Run validation (& log) every N steps"
     )
     parser.add_argument(
         "--halting_thresh",
@@ -173,52 +176,62 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tr_log_interval",
         type=int,
-        default=1,
+        default=100,
         help="Log training loss every N steps"
-    )
-    parser.add_argument(
-        "--val_interval",
-        type=int,
-        default=1,
-        help="Run validation (& log) every N steps"
     )
     parser.add_argument(
         "--train_length",
         type=int,
         default=40,
-        help="length of input sequence for training"
+        help="Length of input sequence for training"
     )
     parser.add_argument(
-        "--test_length",
+        "--val_length",
         type=int,
         default=400,
-        help="length of input sequence for testing"
+        help="Length of input sequence for validation"
+    )
+    parser.add_argument(
+        "--source_vocab_size",
+        type=int,
+        default=1, # for algorithmic tasks just one integer as input
+        help="Vocab size of input"
+    )
+    parser.add_argument(
+        "--nclass",
+        type=int,
+        default=33,
+        help="Number of classes (0 is padding)"
     )
     parser.add_argument(
         "--task",
         type=str,
-        default="rev, scopy, badd",
-        help="current algorithmic task"
+        default="badd, scopy, rev",
+        help="List of algorithmic tasks to be processed" # rev: reverse input sequence, scopy: copy input sequence, badd: integer addition
     )
     args = parser.parse_args()
 
 
     train_length = args.train_length
-    test_length = args.test_length
-    nclass = 33
+    val_length = args.val_length
     batch_size = args.batch_size
     train_steps = args.train_steps
-    test_steps = args.test_steps
+    val_steps = args.val_steps
+    val_interval = args.val_interval
+    tr_log_interval = args.tr_log_interval
     task_list = args.task.replace(" ", "").split(",")
 
+
+    # Iterate over tasks
     for task in task_list:
 
+        # Initialize Generator
         data_generator = generators[task]
 
         # Initialize model
         model = UniversalTransformer(
-            source_vocab_size=1,#data_generator.base+1,
-            target_vocab_size=35,#data_generator.base+1,
+            source_vocab_size=args.source_vocab_size,
+            target_vocab_size=args.nclass+1,
             d_model=args.d_model,
             n_heads=args.n_heads,
             d_feedforward=args.d_feedforward,
@@ -249,5 +262,5 @@ if __name__ == "__main__":
            logger.info(f"    {k}: {v}")
         logger.info("}\n")
 
-        #start training
-        train_loop(model, train_length, test_length, data_generator, batch_size, train_steps, test_steps)
+        #start training loop
+        train_loop(model, train_length, val_length, data_generator, batch_size, train_steps, val_steps, tr_log_interval, val_interval)
