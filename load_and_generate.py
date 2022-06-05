@@ -29,7 +29,6 @@ if __name__ == "__main__":
         "input_text",
         type=str,
         help="Input text",
-        required=True,
     )
     parser.add_argument(
         "--device",
@@ -40,9 +39,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.device is None:
-        device = torch.device(
-            f"cuda" if torch.cuda.is_available() else "cpu"
-        )
+        device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = args.device
         if device.type == "cuda" and not torch.cuda.is_available():
