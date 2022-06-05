@@ -103,6 +103,17 @@ def batch_loss_step(model, batch, loss_fn, device):
         target_padding_mask=shifted_tgt_pad_mask,
     )
     loss_value = loss_fn(out.view(-1, out.shape[-1]), target.view(-1))
+
+    # delete tensors to free memory
+    del (
+        source,
+        target,
+        shifted_target,
+        src_pad_mask,
+        tgt_pad_mask,
+        shifted_tgt_pad_mask,
+    )
+
     return out, loss_value
 
 
@@ -351,9 +362,10 @@ if __name__ == "__main__":
                 torch.save(
                     {
                         "step": step,
-                        "model_state_dict": ddp_model.state_dict(),
+                        "model_state_dict": model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                         "wandb_run_id": wandb.run.id,
+                        "config": wandb.config,
                     },
                     cp_path,
                 )
@@ -361,52 +373,51 @@ if __name__ == "__main__":
 
             # validate & log
             if step % args.val_interval == 0:
-                ddp_model.eval()
+                model.eval()
                 val_losses = []
                 bleu = load_metric("bleu")
 
                 # BLEU
-                # for i_ex in range(10):
-                #     example = validation_ds[i_ex]
-                #     src_txt = example["translation"]["de"]
-                #     tgt_txt = example["translation"]["en"]
-                #     translated = utils.translate_text(
-                #         src_txt, model, tokenizer, device=device
-                #     )
-                #     if len(translated) == 0:
-                #         # to prevent division by zero in BLEU with empty string
-                #         translated = "0"
-                #     bleu.add(
-                #         predictions=translated.split(), references=[tgt_txt.split()]
-                #     )
-                # bleu_score = bleu.compute()["bleu"]
-                bleu_score = 0
+                for i_ex in range(10):
+                    example = validation_ds[i_ex]
+                    src_txt = example["translation"]["de"]
+                    tgt_txt = example["translation"]["en"]
+                    translated = utils.translate_text(
+                        src_txt, model, tokenizer, device=device
+                    )
+                    if len(translated) == 0:
+                        # to prevent division by zero in BLEU with empty string
+                        translated = "0"
+                    bleu.add(
+                        predictions=translated.split(), references=[tgt_txt.split()]
+                    )
+                bleu_score = bleu.compute()["bleu"]
 
                 # validation loss
                 with torch.no_grad():
                     for batch in validation_dataloader:
-                        out, val_loss = batch_loss_step(ddp_model, batch, loss, device)
+                        out, val_loss = batch_loss_step(model, batch, loss, device)
                         val_losses.append(val_loss.item())
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
 
-                # # translate demo text
-                # demo_trans_text = utils.translate_text(
-                #     demo_source_txt, model, tokenizer, device=device
-                # )
+                # translate demo text
+                demo_trans_text = utils.translate_text(
+                    demo_source_txt, model, tokenizer, device=device
+                )
 
                 # log to W&B and console
                 wandb.log(
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
-                        # "demo_translated": wandb.Html(demo_trans_text),
+                        "demo_translated": wandb.Html(demo_trans_text),
                     },
                     step=step,
                 )
                 L.log(
                     f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
                 )
-                # L.log("")
-                # L.log(f"SRC: {demo_source_txt}")
-                # L.log(f"TGT: {demo_target_txt}")
-                # L.log(f"OUTPUT: {demo_trans_text}")
-                # L.log("")
+                L.log("")
+                L.log(f"SRC: {demo_source_txt}")
+                L.log(f"TGT: {demo_target_txt}")
+                L.log(f"OUTPUT: {demo_trans_text}")
+                L.log("")
