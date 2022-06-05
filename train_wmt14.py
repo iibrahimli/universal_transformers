@@ -25,8 +25,8 @@ import utils
 
 def tokenize(examples, max_seq_len=100):
     """Tokenize examples from dataset"""
-    src = [ex["de"] + tokenizer.eos_token for ex in examples["translation"]]
-    tgt = [ex["en"] + tokenizer.eos_token for ex in examples["translation"]]
+    src = [ex["en"] + tokenizer.eos_token for ex in examples["translation"]]
+    tgt = [ex["de"] + tokenizer.eos_token for ex in examples["translation"]]
     model_inputs = tokenizer(src, max_length=max_seq_len, truncation=True)
     labels = tokenizer(tgt, max_length=max_seq_len, truncation=True)
 
