@@ -256,8 +256,8 @@ if __name__ == "__main__":
 
     # Demo sentence to try to translate throughout training
     demo_sample = validation_ds[2]
-    demo_source_txt = demo_sample["translation"]["de"]
-    demo_target_txt = demo_sample["translation"]["en"]
+    demo_source_txt = demo_sample["translation"]["en"]
+    demo_target_txt = demo_sample["translation"]["de"]
 
     # Initialize model
     model = UniversalTransformer(
@@ -388,24 +388,24 @@ if __name__ == "__main__":
                         val_losses.append(val_loss.item())
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
 
-                # translate demo text
-                demo_trans_text = utils.translate_text(
-                    demo_source_txt, model, tokenizer, device=device
-                )
+                # # translate demo text
+                # demo_trans_text = utils.translate_text(
+                #     demo_source_txt, model, tokenizer, device=device
+                # )
 
                 # log to W&B and console
                 wandb.log(
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
-                        "demo_translated": wandb.Html(demo_trans_text),
+                        # "demo_translated": wandb.Html(demo_trans_text),
                     },
                     step=step,
                 )
                 L.log(
                     f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
                 )
-                L.log("")
-                L.log(f"DE: {demo_source_txt}")
-                L.log(f"EN: {demo_target_txt}")
-                L.log(f"output: {demo_trans_text}")
-                L.log("")
+                # L.log("")
+                # L.log(f"SRC: {demo_source_txt}")
+                # L.log(f"TGT: {demo_target_txt}")
+                # L.log(f"OUTPUT: {demo_trans_text}")
+                # L.log("")
