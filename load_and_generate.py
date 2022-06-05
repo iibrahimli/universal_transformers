@@ -41,7 +41,7 @@ if __name__ == "__main__":
     if args.device is None:
         device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
     else:
-        device = args.device
+        device = torch.device(args.device)
         if device.type == "cuda" and not torch.cuda.is_available():
             print(f"Provided device {device}, but cuda is not available. Exiting.")
             exit(1)

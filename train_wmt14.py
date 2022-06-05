@@ -219,7 +219,7 @@ if __name__ == "__main__":
             f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu"
         )
     else:
-        device = args.device
+        device = torch.device(args.device)
         if device.type == "cuda" and not torch.cuda.is_available():
             L.log(f"Provided device {device}, but it is not available. Exiting.")
             exit(1)
