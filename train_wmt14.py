@@ -95,7 +95,7 @@ def batch_loss_step(model, batch, loss_fn, device):
     shifted_target = shifted_target.to(device)
     src_pad_mask = src_pad_mask.to(device)
     shifted_tgt_pad_mask = shifted_tgt_pad_mask.to(device)
-    
+
     out = model(
         source,
         shifted_target,
@@ -379,15 +379,16 @@ if __name__ == "__main__":
                     bleu.add(
                         predictions=translated.split(), references=[tgt_txt.split()]
                     )
+                bleu_score = bleu.compute()["bleu"]
 
                 # validation loss
                 with torch.no_grad():
                     for batch in validation_dataloader:
                         out, val_loss = batch_loss_step(ddp_model, batch, loss, device)
                         val_losses.append(val_loss.item())
-
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
-                bleu_score = bleu.compute()["bleu"]
+
+                # translate demo text
                 demo_trans_text = utils.translate_text(
                     demo_source_txt, model, tokenizer, device=device
                 )
