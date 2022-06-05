@@ -306,8 +306,8 @@ if __name__ == "__main__":
 
     # Resume from checkpoint if needed
     if args.resume_checkpoint is not None:
-        map_location = {"cuda:0": f"cuda:{local_rank}"}
-        checkpoint = torch.load(args.resume_checkpoint)
+        # map_location = {"cuda:0": f"cuda:{local_rank}"}
+        checkpoint = torch.load(args.resume_checkpoint, map_location="cpu")
         step = checkpoint["step"]
         wandb_run_id = checkpoint["wandb_run_id"]
         ddp_model.module.load_state_dict(checkpoint["model_state_dict"])
