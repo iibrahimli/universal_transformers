@@ -387,8 +387,8 @@ if __name__ == "__main__":
                 # BLEU
                 for i_ex in range(10):
                     example = validation_ds[i_ex]
-                    src_txt = example["translation"]["de"]
-                    tgt_txt = example["translation"]["en"]
+                    src_txt = example["translation"]["en"]
+                    tgt_txt = example["translation"]["de"]
                     translated = utils.translate_text(
                         src_txt, model, tokenizer, device=device
                     )
