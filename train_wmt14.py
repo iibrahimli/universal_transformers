@@ -381,6 +381,8 @@ if __name__ == "__main__":
                 val_losses = []
                 bleu = load_metric("bleu")
 
+                translation_examples = {"source": [], "target": [], "output": []}
+
                 # BLEU
                 for i_ex in range(10):
                     example = validation_ds[i_ex]
@@ -389,12 +391,16 @@ if __name__ == "__main__":
                     translated = utils.translate_text(
                         src_txt, model, tokenizer, device=device
                     )
+                    translation_examples["source"].append(src_txt)
+                    translation_examples["target"].append(tgt_txt)
+                    translation_examples["output"].append(translated)
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
                     bleu.add(
                         predictions=translated.split(), references=[tgt_txt.split()]
                     )
+
                 bleu_score = bleu.compute()["bleu"]
 
                 # validation loss
@@ -413,7 +419,7 @@ if __name__ == "__main__":
                 wandb.log(
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
-                        "demo_translated": wandb.Html(demo_trans_text),
+                        "translation_examples": wandb.Table(data=translation_examples),
                     },
                     step=step,
                 )
