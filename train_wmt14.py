@@ -422,7 +422,7 @@ if __name__ == "__main__":
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
                         "translation_examples": wandb.Table(
-                            dataframe=pd.DataFrame(translation_examples)
+                            dataframe=pd.DataFrame(translation_examples)[:5]
                         ),
                     },
                     step=step,
