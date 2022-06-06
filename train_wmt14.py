@@ -10,6 +10,7 @@ import argparse
 
 import wandb
 import torch
+import pandas as pd
 import torch.nn as nn
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -419,7 +420,7 @@ if __name__ == "__main__":
                 wandb.log(
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
-                        "translation_examples": wandb.Table(data=translation_examples),
+                        "translation_examples": wandb.Table(dataframe=pd.DataFrame(translation_examples)),
                     },
                     step=step,
                 )
