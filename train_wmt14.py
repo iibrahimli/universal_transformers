@@ -399,7 +399,8 @@ if __name__ == "__main__":
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
                     bleu.add(
-                        predictions=translated.split(), references=[tgt_txt.split()]
+                        predictions=translated.lower().split(),
+                        references=[tgt_txt.lower().split()],
                     )
 
                 bleu_score = bleu.compute()["bleu"]
@@ -420,7 +421,9 @@ if __name__ == "__main__":
                 wandb.log(
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
-                        "translation_examples": wandb.Table(dataframe=pd.DataFrame(translation_examples)),
+                        "translation_examples": wandb.Table(
+                            dataframe=pd.DataFrame(translation_examples)
+                        ),
                     },
                     step=step,
                 )
