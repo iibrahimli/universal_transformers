@@ -79,7 +79,7 @@ def batch_loss_step_val(model, batch, loss_fn, device):
     out = model.generate_algorithmic(
         source, src_pad_mask
     )
-    loss_value = loss_fn(out.view(-1, model.target_vocab_size), target.view(-1))
+    loss_value = loss_fn(out.flatten(0, 1), target.view(-1))
     return out, loss_value
 
 
@@ -96,10 +96,11 @@ def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_int
 
     targets = batch[1]
     tgt_padding_maks = batch[3]
-    acc = calc_seq_acc(out, targets, tgt_padding_maks)
+    seg_acc = calc_seq_acc(out, targets, tgt_padding_maks)
+    char_acc = calc_char_acc(out, targets, tgt_padding_maks)
 
     if step % tr_log_interval == 0:
-         wandb.log({"tr": {"loss": tr_loss.item(), "accuracy": acc}, "lr": lr}, step=step)
+         wandb.log({"tr": {"loss": tr_loss.item(), "seg_acc": seg_acc, 'char_acc': char_acc}, "lr": lr}, step=step)
 
 
 def infer_for_a_step(model, batch):
@@ -187,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_steps",
         type=int,
-        default=50,
+        default=10,
         help="Number of validation steps"
     )
     parser.add_argument(
@@ -211,7 +212,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tr_log_interval",
         type=int,
-        default=100,
+        default=1,
         help="Log training loss every N steps"
     )
     parser.add_argument(
@@ -223,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_length",
         type=int,
-        default=400,
+        default=40,
         help="Length of input sequence for validation"
     )
     parser.add_argument(

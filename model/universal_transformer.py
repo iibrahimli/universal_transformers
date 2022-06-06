@@ -285,26 +285,30 @@ class UniversalTransformer(nn.Module):
             Sequence of generated tokens of shape [batch_size, seq_len]
         """
 
-        out = torch.zeros((*source.shape[:3], self.target_vocab_size), device=source.device)
+        # pad zero to fit training padding shape
+        out_shape = (source.shape[0], source.shape[1]+1, self.target_vocab_size)
+        out = torch.zeros(out_shape, device=source.device)
 
         # embed source and output
-        out_emb = self.target_tok_emb(torch.zeros_like(source))
+        out_emb = self.target_tok_emb(torch.zeros(out_shape[:2], device=source.device))
         source = self.source_tok_emb(source)
 
-        out_mask = self.generate_subsequent_mask_algo(source)
+        out_mask = self.generate_subsequent_mask_algo(out_emb)
 
         # run encoder
         source = self.forward_encoder(source, source_pad_mask)
 
         # start from pad token, append last generated token to the input to
         # the decoder and generate until EOS token
-        for i in range(source.shape[1]):
-            output = self.forward_decoder(source, out_emb, target_padding_mask=out_mask[i])
-            output = self.generator(output[:,i])
-            out[:, i] = output
-            out_emb[:, i] = self.source_tok_emb(output.argmax(-1))
-
-        return out
+        for i in range(out.shape[1]-1):
+            output = self.forward_decoder(source, out_emb[:, :i+2],
+                                          target_padding_mask=out_mask[i, :, :i+2])
+            # i + 1 to skip padding token
+            output = self.generator(output[:,i+1])
+            out[:, i +1] = output
+            out_emb[:, i + 1 ] = self.source_tok_emb(output.argmax(-1))
+        #return unpadded output
+        return out[:, 1:]
 
     @staticmethod
     def generate_subsequent_mask(target):
