@@ -22,7 +22,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
 
 
-def calc_acc(outputs, targets, tgt_padding_mask):
+def calc_seq_acc(outputs, targets, tgt_padding_mask):
     """Calculate accuracy for a batch"""
     if outputs.shape[-1] == 1:
         outputs = np.round(outputs.detach().numpy())
@@ -34,29 +34,61 @@ def calc_acc(outputs, targets, tgt_padding_mask):
 
     return tp/len(outputs)
 
-def batch_loss_step(model, batch, loss_fn, device):
+def calc_char_acc(outputs, targets, tgt_padding_mask):
+    """Calculate accuracy for a batch"""
+
+    if outputs.shape[-1] == 1:
+        outputs = np.round(outputs.detach().numpy())
+    else:
+        outputs = np.argmax(outputs.detach().numpy(), axis=-1)
+    valid_pos = ~tgt_padding_mask.detach().numpy()
+    targets = targets.detach().numpy()
+    outputs = outputs[valid_pos]
+    targets = targets[valid_pos]
+    tp = (outputs == targets).sum()
+
+    return tp/len(outputs)
+
+def batch_loss_step(model, batch, loss_fn, device, pad_val):
+    """Compute loss for a batch"""
+    source, target, src_pad_mask, tgt_pad_mask = batch
+    shifted_target, shifted_tgt_pad_mask = utils.prepare_target(
+        target, tgt_pad_mask, pad_val
+    )
+    source = source.to(device)
+    target = target.to(device)
+    shifted_target = shifted_target.to(device)
+    src_pad_mask = src_pad_mask.to(device)
+    tgt_pad_mask = tgt_pad_mask.to(device)
+    shifted_tgt_pad_mask = shifted_tgt_pad_mask.to(device)
+    out = model(
+        source,
+        shifted_target,
+        source_padding_mask=src_pad_mask,
+        target_padding_mask=shifted_tgt_pad_mask,
+    )
+    loss_value = loss_fn(out.view(-1, model.target_vocab_size), target.view(-1))
+    return out, loss_value
+
+def batch_loss_step_val(model, batch, loss_fn, device):
     """Compute loss for a batch"""
     source, target, src_pad_mask, tgt_pad_mask = batch
     source = source.to(device)
-    target = target.to(device)
     src_pad_mask = src_pad_mask.to(device)
-    tgt_pad_mask = tgt_pad_mask.to(device)
-    out = model(
-        source,
-        target,
-        source_padding_mask=src_pad_mask,
-        target_padding_mask=tgt_pad_mask,
+
+    out = model.generate_algorithmic(
+        source, src_pad_mask
     )
     loss_value = loss_fn(out.view(-1, model.target_vocab_size), target.view(-1))
     return out, loss_value
 
 
-def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_interval):
+def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_interval, pad_val):
     batch = data_generator.get_batch(length, batch_size)
     model.train()
     optimizer.zero_grad()
 
-    out, tr_loss = batch_loss_step(model, batch, loss, DEVICE)
+    out, tr_loss = batch_loss_step(model, batch, loss, DEVICE, pad_val)
     tr_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     optimizer.step()
@@ -64,7 +96,7 @@ def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_int
 
     targets = batch[1]
     tgt_padding_maks = batch[3]
-    acc = calc_acc(out, targets, tgt_padding_maks)
+    acc = calc_seq_acc(out, targets, tgt_padding_maks)
 
     if step % tr_log_interval == 0:
          wandb.log({"tr": {"loss": tr_loss.item(), "accuracy": acc}, "lr": lr}, step=step)
@@ -73,32 +105,35 @@ def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_int
 def infer_for_a_step(model, batch):
     model.eval()
     with torch.no_grad():
-        out, eval_loss = batch_loss_step(model, batch, loss, DEVICE)
+        out, eval_loss = batch_loss_step_val(model, batch, loss, DEVICE)
     return out, eval_loss
 
 
 def run_evaluation(model, l, batch_size, data_generator, val_steps, step=0):
     """Test model on test data of length l"""
-    accuracy = []
+    seq_accuracy = []
+    char_accuracy = []
     for step in range(val_steps):
         batch = data_generator.get_batch(l, batch_size)
         out, eval_loss = infer_for_a_step(model, batch)
         targets = batch[1]
         tgt_padding_maks = batch[3]
-        acc = calc_acc(out, targets, tgt_padding_maks)
-        accuracy.append(acc)
-    wandb.log({"val": {"accuracy": np.mean(accuracy)}})
+        seq_acc = calc_seq_acc(out, targets, tgt_padding_maks)
+        char_acc = calc_char_acc(out, targets, tgt_padding_maks)
+        seq_accuracy.append(seq_acc)
+        char_accuracy.append(char_acc)
+    wandb.log({"val": {"sequence accuracy": np.mean(seq_accuracy), "charcater accuracy": np.mean(char_acc)}})
 
-    return accuracy
+    return seq_accuracy, char_accuracy
 
-def train_loop(model, train_length, val_length, data_generator, batch_size, train_steps, val_steps, tr_log_interval, val_interval):
+def train_loop(model, train_length, val_length, data_generator, batch_size, train_steps, val_steps, tr_log_interval, val_interval, pad_val):
     # Main training loop.
     for step in range(train_steps):
-        train_for_a_step(model, train_length, batch_size, data_generator, step, tr_log_interval)
+        train_for_a_step(model, train_length, batch_size, data_generator, step, tr_log_interval, pad_val)
         print(step)
         # Run evaluation.
         if step > 0 and step % val_interval == 0:
-            accuracy = run_evaluation(model, val_length, batch_size, data_generator, val_steps, step)
+            seq_accuracy, char_accuracy = run_evaluation(model, val_length, batch_size, data_generator, val_steps, step)
 
 
 
@@ -204,6 +239,12 @@ if __name__ == "__main__":
         help="Number of classes (0 is padding)"
     )
     parser.add_argument(
+        "--pad_val",
+        type=int,
+        default=0,
+        help="Value used for padding"
+    )
+    parser.add_argument(
         "--task",
         type=str,
         default="badd, scopy, rev",
@@ -215,6 +256,7 @@ if __name__ == "__main__":
     train_length = args.train_length
     val_length = args.val_length
     batch_size = args.batch_size
+    pad_val = args.pad_val
     train_steps = args.train_steps
     val_steps = args.val_steps
     val_interval = args.val_interval
@@ -263,4 +305,4 @@ if __name__ == "__main__":
         logger.info("}\n")
 
         #start training loop
-        train_loop(model, train_length, val_length, data_generator, batch_size, train_steps, val_steps, tr_log_interval, val_interval)
+        train_loop(model, train_length, val_length, data_generator, batch_size, train_steps, val_steps, tr_log_interval, val_interval, pad_val)

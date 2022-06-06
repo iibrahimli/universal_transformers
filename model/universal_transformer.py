@@ -269,6 +269,43 @@ class UniversalTransformer(nn.Module):
                 break
         return generated
 
+
+    def generate_algorithmic(
+        self,
+        source: Tensor,
+        source_pad_mask: Tensor
+    ):
+        """
+        Autoregressively generate output sequence for algorithmic tasks.
+
+        TODO check correctness (huggingface)
+        TODO add generation methods: beam search, top-k sampling, etc.
+
+        Returns:
+            Sequence of generated tokens of shape [batch_size, seq_len]
+        """
+
+        out = torch.zeros((*source.shape[:3], self.target_vocab_size), device=source.device)
+
+        # embed source and output
+        out_emb = self.target_tok_emb(torch.zeros_like(source))
+        source = self.source_tok_emb(source)
+
+        out_mask = self.generate_subsequent_mask_algo(source)
+
+        # run encoder
+        source = self.forward_encoder(source, source_pad_mask)
+
+        # start from pad token, append last generated token to the input to
+        # the decoder and generate until EOS token
+        for i in range(source.shape[1]):
+            output = self.forward_decoder(source, out_emb, target_padding_mask=out_mask[i])
+            output = self.generator(output[:,i])
+            out[:, i] = output
+            out_emb[:, i] = self.source_tok_emb(output.argmax(-1))
+
+        return out
+
     @staticmethod
     def generate_subsequent_mask(target):
         """
@@ -289,4 +326,28 @@ class UniversalTransformer(nn.Module):
             .masked_fill(target_mask == 0, float("-inf"))
             .masked_fill(target_mask == 1, float(0.0))
         )
+        return target_mask
+
+    @staticmethod
+    def generate_subsequent_mask_algo(target):
+        """
+        Generate autoregression mask that prevents attending to future positions.
+
+        Args:
+            target: Has shape [batch_size, seq_len, embedding_dim] or [seq_len, embedding_dim]
+
+        Returns:
+            Tensor with shape [seq_len, seq_len]
+        """
+        sz = target.size(1)
+        target_mask = (
+                torch.triu(torch.ones((sz, sz), device=target.device)) == 1
+        ).transpose(0, 1)
+        target_mask = (
+            target_mask.float()
+                .masked_fill(target_mask == 0, float("-inf"))
+                .masked_fill(target_mask == 1, float(0.0))
+        )
+        target_mask = target_mask.unsqueeze(dim=1)
+        target_mask = target_mask.repeat(1,target.size(0),1)
         return target_mask
