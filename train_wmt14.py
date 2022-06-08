@@ -382,7 +382,7 @@ if __name__ == "__main__":
                 val_losses = []
                 bleu = load_metric("bleu")
 
-                translation_examples = {"source": [], "target": [], "output": []}
+                translation_examples = []
 
                 # BLEU
                 for i_ex in range(10):
@@ -392,6 +392,7 @@ if __name__ == "__main__":
                     translated = utils.translate_text(
                         src_txt, model, tokenizer, device=device
                     )
+                    translation_examples.append(f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}")
                     translation_examples["source"].append(src_txt)
                     translation_examples["target"].append(tgt_txt)
                     translation_examples["output"].append(translated)
@@ -421,9 +422,9 @@ if __name__ == "__main__":
                 wandb.log(
                     {
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
-                        "translation_examples": wandb.Table(
-                            dataframe=pd.DataFrame(translation_examples)[:5]
-                        ),
+                        "translation_examples": wandb.Html(
+                            "\n---\n".join(translation_examples)
+                        )
                     },
                     step=step,
                 )
