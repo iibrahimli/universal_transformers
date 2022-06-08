@@ -10,7 +10,6 @@ import argparse
 
 import wandb
 import torch
-import pandas as pd
 import torch.nn as nn
 from datasets import load_dataset
 from transformers import AutoTokenizer
