@@ -1,5 +1,6 @@
 python3 train_wmt14.py \
-    --batch_size 3 --d_model 16 \
+    --batch_size 3 \
+    --d_model 16 \
     --d_feedforward 32 \
     --wandb_project ut_scratch \
     --max_seq_len 8 \
