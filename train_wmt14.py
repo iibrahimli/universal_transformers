@@ -102,7 +102,9 @@ def batch_loss_step(model, batch, loss_fn, device):
         source_padding_mask=src_pad_mask,
         target_padding_mask=shifted_tgt_pad_mask,
     )
-    loss_tensor = loss_fn(out.view(-1, out.shape[-1]), target.view(-1))
+    loss_tensor = loss_fn(
+        out.contiguous().view(-1, out.shape[-1]), target.contiguous().view(-1)
+    )
 
     # only keep loss for non-padded tokens
     loss_tensor = loss_tensor[~tgt_pad_mask.view(-1)]
@@ -391,7 +393,9 @@ if __name__ == "__main__":
                     translated = utils.translate_text(
                         src_txt, model, tokenizer, device=device
                     )
-                    translation_examples.append(f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}")
+                    translation_examples.append(
+                        f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}"
+                    )
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
@@ -420,7 +424,7 @@ if __name__ == "__main__":
                         "val": {"loss": val_loss_value, "bleu": bleu_score},
                         "translation_examples": wandb.Html(
                             "\n---\n".join(translation_examples)
-                        )
+                        ),
                     },
                     step=step,
                 )
