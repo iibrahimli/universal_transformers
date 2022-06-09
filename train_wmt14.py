@@ -11,10 +11,10 @@ import argparse
 import wandb
 import torch
 import torch.nn as nn
+import evaluate
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from transformers import DataCollatorForSeq2Seq
-from datasets import load_dataset, load_metric
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -379,7 +379,7 @@ if __name__ == "__main__":
             if step % args.val_interval == 0:
                 model.eval()
                 val_losses = []
-                bleu = load_metric("bleu")
+                bleu = evaluate.load("bleu")
 
                 translation_examples = []
 
@@ -395,9 +395,9 @@ if __name__ == "__main__":
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
-                    bleu.add(
-                        predictions=translated.lower().split(),
-                        references=[tgt_txt.lower().split()],
+                    bleu.add_batch(
+                        predictions=translated.lower(),
+                        references=[tgt_txt.lower()],
                     )
 
                 bleu_score = bleu.compute()["bleu"]
