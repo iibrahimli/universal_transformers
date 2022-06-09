@@ -396,8 +396,8 @@ if __name__ == "__main__":
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
                     bleu.add_batch(
-                        predictions=translated.lower(),
-                        references=[tgt_txt.lower()],
+                        predictions=[translated.lower()],
+                        references=[[tgt_txt.lower()]],
                     )
 
                 bleu_score = bleu.compute()["bleu"]
