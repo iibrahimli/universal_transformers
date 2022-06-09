@@ -392,9 +392,6 @@ if __name__ == "__main__":
                         src_txt, model, tokenizer, device=device
                     )
                     translation_examples.append(f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}")
-                    translation_examples["source"].append(src_txt)
-                    translation_examples["target"].append(tgt_txt)
-                    translation_examples["output"].append(translated)
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
                         translated = "0"
