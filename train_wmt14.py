@@ -392,7 +392,7 @@ if __name__ == "__main__":
                 translation_examples = []
 
                 # BLEU
-                for i_ex in range(10):
+                for i_ex in range(100):
                     example = validation_ds[i_ex]
                     src_txt = example["translation"]["en"]
                     tgt_txt = example["translation"]["de"]
