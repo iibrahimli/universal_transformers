@@ -295,8 +295,9 @@ if __name__ == "__main__":
     loss = torch.nn.CrossEntropyLoss(
         reduction="none", label_smoothing=args.label_smoothing
     ).to(device)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, betas=(0.9, 0.98))
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-5)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=1e-5, betas=(0.9, 0.98), eps=1e-9
+    )
     scheduler = utils.CustomLRScheduler(
         optimizer, d_model=args.d_model, warmup_steps=5000, lr_mul=args.lr_mul
     )
