@@ -61,14 +61,14 @@ def batch_loss_step(model, batch, loss_fn, device, pad_val):
     src_pad_mask = src_pad_mask.to(device)
     tgt_pad_mask = tgt_pad_mask.to(device)
     shifted_tgt_pad_mask = shifted_tgt_pad_mask.to(device)
-    out = model(
+    out, ponder_time = model(
         source,
         shifted_target,
         source_padding_mask=src_pad_mask,
         target_padding_mask=shifted_tgt_pad_mask,
     )
     loss_value = loss_fn(out.view(-1, model.target_vocab_size), target.view(-1))
-    return out, loss_value
+    return out, loss_value, ponder_time
 
 def batch_loss_step_val(model, batch, loss_fn, device):
     """Compute loss for a batch"""
@@ -76,11 +76,11 @@ def batch_loss_step_val(model, batch, loss_fn, device):
     source = source.to(device)
     src_pad_mask = src_pad_mask.to(device)
 
-    out = model.generate_algorithmic(
+    out, ponder_time = model.generate_algorithmic(
         source, src_pad_mask
     )
     loss_value = loss_fn(out.flatten(0, 1), target.view(-1))
-    return out, loss_value
+    return out, loss_value, ponder_time
 
 
 def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_interval, pad_val):
@@ -88,7 +88,7 @@ def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_int
     model.train()
     optimizer.zero_grad()
 
-    out, tr_loss = batch_loss_step(model, batch, loss, DEVICE, pad_val)
+    out, tr_loss, ponder_time = batch_loss_step(model, batch, loss, DEVICE, pad_val)
     tr_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     optimizer.step()
@@ -96,17 +96,20 @@ def train_for_a_step(model, length, batch_size, data_generator, step, tr_log_int
 
     targets = batch[1]
     tgt_padding_maks = batch[3]
-    seg_acc = calc_seq_acc(out, targets, tgt_padding_maks)
+    seq_acc = calc_seq_acc(out, targets, tgt_padding_maks)
     char_acc = calc_char_acc(out, targets, tgt_padding_maks)
+    max_ponder_time = float(torch.max(ponder_time))
+    avg_ponder_time = float(torch.mean(ponder_time))
 
     if step % tr_log_interval == 0:
-         wandb.log({"tr": {"loss": tr_loss.item(), "seg_acc": seg_acc, 'char_acc': char_acc}, "lr": lr}, step=step)
+         wandb.log({"tr": {"loss": tr_loss.item(), "seq acc": seq_acc, 'char acc': char_acc,
+                           'max ponder time': max_ponder_time, 'avg ponder time': avg_ponder_time}, "lr": lr}, step=step)
 
 
 def infer_for_a_step(model, batch):
     model.eval()
     with torch.no_grad():
-        out, eval_loss = batch_loss_step_val(model, batch, loss, DEVICE)
+        out, eval_loss, ponder_time = batch_loss_step_val(model, batch, loss, DEVICE)
     return out, eval_loss
 
 
@@ -116,14 +119,17 @@ def run_evaluation(model, l, batch_size, data_generator, val_steps, step=0):
     char_accuracy = []
     for step in range(val_steps):
         batch = data_generator.get_batch(l, batch_size)
-        out, eval_loss = infer_for_a_step(model, batch)
+        out, eval_loss, ponder_time = infer_for_a_step(model, batch)
         targets = batch[1]
         tgt_padding_maks = batch[3]
         seq_acc = calc_seq_acc(out, targets, tgt_padding_maks)
         char_acc = calc_char_acc(out, targets, tgt_padding_maks)
         seq_accuracy.append(seq_acc)
         char_accuracy.append(char_acc)
-    wandb.log({"val": {"sequence accuracy": np.mean(seq_accuracy), "charcater accuracy": np.mean(char_acc)}})
+        max_ponder_time = float(torch.max(ponder_time))
+        avg_ponder_time = float(torch.mean(ponder_time))
+    wandb.log({"val": {"seq acc": np.mean(seq_accuracy), "char acc": np.mean(char_acc),
+                       'max ponder time': max_ponder_time, 'avg ponder time': avg_ponder_time}})
 
     return seq_accuracy, char_accuracy
 
