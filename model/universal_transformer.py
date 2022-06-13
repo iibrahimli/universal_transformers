@@ -125,12 +125,12 @@ class UniversalTransformer(nn.Module):
         target_mask = self.generate_subsequent_mask(target)
 
         # run encoder and decoder
-        memory = self.forward_encoder(source, source_padding_mask)
+        memory, ponder_time = self.forward_encoder(source, source_padding_mask)
         output = self.forward_decoder(
             memory, target, target_mask, source_padding_mask, target_padding_mask
         )
         output = self.generator(output)
-        return output
+        return output, ponder_time
 
     def forward_encoder(self, src: Tensor, src_padding_mask: Tensor = None):
         """
@@ -146,6 +146,7 @@ class UniversalTransformer(nn.Module):
         halting_probability = torch.zeros((*src.shape[:-1], 1), device=src.device)
         remainders = torch.zeros_like(halting_probability)
         n_updates = torch.zeros_like(halting_probability)
+        ponder_time = torch.zeros_like(halting_probability)
         new_src = src.clone()
         """
         Perform forward pass of the encoder.
@@ -161,6 +162,7 @@ class UniversalTransformer(nn.Module):
             still_running = halting_probability < self.halting_thresh
             p = self.halting_layer(new_src)
             new_halted = (halting_probability + p * still_running) > self.halting_thresh
+            ponder_time[~new_halted] += 1
             still_running = (
                 halting_probability + p * still_running
             ) <= self.halting_thresh
@@ -172,7 +174,8 @@ class UniversalTransformer(nn.Module):
             new_src = self.pos_encoder(src, time_step)
             new_src = self.encoder_layer(new_src, src_key_padding_mask=src_padding_mask)
             src = (new_src * update_weights) + (src * (1 - update_weights))
-        return src
+        return src, ponder_time
+
 
     def forward_decoder(
         self,
@@ -245,7 +248,7 @@ class UniversalTransformer(nn.Module):
         source = self.source_tok_emb(source)
 
         # run encoder
-        memory = self.forward_encoder(source)
+        memory, ponder_time = self.forward_encoder(source)
 
         # start from pad token, append last generated token to the input to
         # the decoder and generate until EOS token
@@ -296,7 +299,7 @@ class UniversalTransformer(nn.Module):
         out_mask = self.generate_subsequent_mask_algo(out_emb)
 
         # run encoder
-        source = self.forward_encoder(source, source_pad_mask)
+        source, ponder_time = self.forward_encoder(source, source_pad_mask)
 
         # start from pad token, append last generated token to the input to
         # the decoder and generate until EOS token
