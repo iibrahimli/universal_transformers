@@ -176,7 +176,6 @@ class UniversalTransformer(nn.Module):
             src = (new_src * update_weights) + (src * (1 - update_weights))
         return src, ponder_time
 
-
     def forward_decoder(
         self,
         memory: Tensor,
@@ -272,7 +271,6 @@ class UniversalTransformer(nn.Module):
                 break
         return generated
 
-
     def generate_algorithmic(
         self,
         source: Tensor,
@@ -303,15 +301,15 @@ class UniversalTransformer(nn.Module):
 
         # start from pad token, append last generated token to the input to
         # the decoder and generate until EOS token
-        for i in range(out.shape[1]-1):
-            output = self.forward_decoder(source, out_emb[:, :i+2],
-                                          target_padding_mask=out_mask[i, :, :i+2])
+        for i in range(out.shape[1]):
+            output = self.forward_decoder(source, out_emb[:, :i+1],
+                                          target_padding_mask=out_mask[i, :, :i+1])
             # i + 1 to skip padding token
-            output = self.generator(output[:,i+1])
-            out[:, i +1] = output
-            out_emb[:, i + 1 ] = self.source_tok_emb(output.argmax(-1))
+            output = self.generator(output[:, i])
+            out[:, i] = output
+            out_emb[:, i] = self.source_tok_emb(output.argmax(-1))
         #return unpadded output
-        return out[:, 1:]
+        return out[:, 1:], ponder_time
 
     @staticmethod
     def generate_subsequent_mask(target):
