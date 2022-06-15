@@ -55,7 +55,7 @@ class DataGenerator(object):
     def rand_pair_padded(self, length):
         """Construct a random data pair, then pad the inputs to a valid size."""
         pad_length = data_utils.pad(length)
-        l = random.randint(0, length-1)
+        l = random.randint(3, length-1)
         inp, outp = self.rand_pair(l)
         inp = np.array(inp)
         padding_func = lambda x: np.pad(x, [(0, 0)] * (len(x.shape) - 1) +
