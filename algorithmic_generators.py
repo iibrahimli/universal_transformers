@@ -52,10 +52,13 @@ class DataGenerator(object):
         """Random data pair for a task. Total length should be <= length."""
         raise NotImplementedError()
 
-    def rand_pair_padded(self, length):
+    def rand_pair_padded(self, length, rand_length):
         """Construct a random data pair, then pad the inputs to a valid size."""
         pad_length = data_utils.pad(length)
-        l = random.randint(3, length-1)
+        if rand_length:
+            l = random.randint(3, length-1)
+        else:
+            l = length
         inp, outp = self.rand_pair(l)
         inp = np.array(inp)
         padding_func = lambda x: np.pad(x, [(0, 0)] * (len(x.shape) - 1) +
@@ -65,11 +68,11 @@ class DataGenerator(object):
         assert inp.shape[-1] == pad_length, outp.shape[-1] == pad_length
         return inp, outp
 
-    def get_batch(self, length, batch_size):
+    def get_batch(self, length, batch_size, rand_length = True):
         """Construct a complete batch of problem instances"""
         inps, outps = [], []
         for _ in range(batch_size):
-            inp, outp = self.rand_pair_padded(length)
+            inp, outp = self.rand_pair_padded(length, rand_length)
             inps.append(inp)
             outps.append(outp)
 

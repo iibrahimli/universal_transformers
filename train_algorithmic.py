@@ -21,7 +21,7 @@ from algorithmic_generators import generators
 from model import UniversalTransformer
 
 
-DEVICE = 1
+DEVICE = "cpu"#1
 print(f"Using device: {DEVICE}")
 
 
@@ -119,9 +119,11 @@ def infer_for_a_step(model, batch):
 
 
 def run_evaluation(model, l, batch_size, data_generator, val_steps, step=0):
-    """Test model on test data of length l"""
+    """Evaluate model on test data of length l"""
     seq_accuracy = []
     char_accuracy = []
+    max_ponder_time = []
+    avg_ponder_time = []
     for step in range(val_steps):
         batch = data_generator.get_batch(l, batch_size)
         out, eval_loss, ponder_time = infer_for_a_step(model, batch)
@@ -131,13 +133,42 @@ def run_evaluation(model, l, batch_size, data_generator, val_steps, step=0):
         char_acc = calc_char_acc(out, targets, tgt_padding_maks)
         seq_accuracy.append(seq_acc)
         char_accuracy.append(char_acc)
-        max_ponder_time = float(torch.max(ponder_time))
-        avg_ponder_time = float(torch.mean(ponder_time))
+        max_ponder_time.append(float(torch.max(ponder_time)))
+        avg_ponder_time.append(float(torch.mean(ponder_time)))
     wandb.log({"val": {"seq acc": np.mean(seq_accuracy), "char acc": np.mean(char_acc),
-                       'max ponder time': max_ponder_time, 'avg ponder time': avg_ponder_time}})
+                       'max ponder time': np.mean(max_ponder_time), 'avg ponder time': np.mean(avg_ponder_time)}})
 
     return seq_accuracy, char_accuracy
 
+def run_final_test(model, test_lengths, batch_size, data_generator, steps):
+    """Test final trained model on test data of different length l"""
+    res_dict = create_res_dict(test_lengths)
+    seq_accuracy = []
+    char_accuracy = []
+    max_ponder_time = []
+    avg_ponder_time = []
+    for l in test_lengths:
+        for step in range(steps):
+            batch = data_generator.get_batch(l, batch_size, rand_length= False)
+            out, eval_loss, ponder_time = infer_for_a_step(model, batch)
+            targets = batch[1]
+            tgt_padding_maks = batch[3]
+            seq_acc = calc_seq_acc(out, targets, tgt_padding_maks)
+            char_acc = calc_char_acc(out, targets, tgt_padding_maks)
+            seq_accuracy.append(seq_acc)
+            char_accuracy.append(char_acc)
+            max_ponder_time.append(float(torch.max(ponder_time)))
+            avg_ponder_time.append(float(torch.mean(ponder_time)))
+        res_dict[l]["max ponder time"] = np.mean(max_ponder_time)
+        res_dict[l]["avg ponder time"] = np.mean(avg_ponder_time)
+    return res_dict
+
+def create_res_dict(test_lengths):
+    res_dict = dict()
+    for l in test_lengths:
+            l_dict = {"seq acc": 0, "char acc": 0, "max ponder time": 0, "avg ponder time": 0}
+            res_dict[l] = l_dict
+    return res_dict
 
 def train_loop(
     model,
@@ -169,7 +200,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=512,
+        default=4,
         help="Batch size",
     )
     parser.add_argument(
@@ -193,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max_seq_len",
         type=int,
-        default=400,
+        default=401,
         help="Maximum sequence length",
     )
     parser.add_argument(
@@ -202,8 +233,10 @@ if __name__ == "__main__":
         default=10,
         help="Maximum time step",
     )
-    parser.add_argument("--train_steps", type=int, default=100000, help="Number of training steps")
-    parser.add_argument("--val_steps", type=int, default=10, help="Number of validation steps")
+    parser.add_argument("--train_steps", type=int, default=20, help="Number of training steps")
+    parser.add_argument("--val_steps", type=int, default=2, help="Number of validation steps")
+    parser.add_argument("--test_steps", type=int, default=2,
+                        help="Number of test steps")
     parser.add_argument("--val_interval", type=int, default=100, help="Run validation (& log) every N steps")
     parser.add_argument(
         "--halting_thresh",
@@ -231,22 +264,28 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         type=str,
-        default="badd, scopy, rev",
+        default="badd",#, scopy, rev",
         help="List of algorithmic tasks to be processed",  # rev: reverse input sequence, scopy: copy input sequence, badd: integer addition
+    )
+    parser.add_argument(
+        "--test_seq_length",
+        type=str,
+        default="400",
+        help="List of sequence lenghts to be tested on final model",
     )
 
     parser.add_argument(
         "--save_weights",
         type=str,
         default="None",
-        help="path where to save weights to",  # rev: reverse input sequence, scopy: copy input sequence, badd: integer addition
+        help="path where to save weights to",
     )
 
     parser.add_argument(
         "--model_weights",
         type=str,
         default="None",
-        help="path to pretrained model weights",  # rev: reverse input sequence, scopy: copy input sequence, badd: integer addition
+        help="path to pretrained model weights",
     )
     args = parser.parse_args()
 
@@ -256,11 +295,14 @@ if __name__ == "__main__":
     pad_val = args.pad_val
     train_steps = args.train_steps
     val_steps = args.val_steps
+    test_steps = args.test_steps
     val_interval = args.val_interval
     tr_log_interval = args.tr_log_interval
     task_list = args.task.replace(" ", "").split(",")
+    test_seq_lengths = [int(x) for x in args.test_seq_length.replace(" ", "").split(",")]
     model_weights = Path(args.model_weights)
     root_save_path = Path(args.save_weights)
+    result_dict = {}
 
     # Iterate over tasks
     for task in task_list:
@@ -296,8 +338,10 @@ if __name__ == "__main__":
         if root_save_path.name != 'None':
             save_path = root_save_path / f'{wandb.run.id}'
             save_path.mkdir(parents=True, exist_ok=True)
+        else:
+            save_path = root_save_path
 
-        # logger.info("Using args: {")
+            # logger.info("Using args: {")
         # for k, v in wandb.config.items():
         #    logger.info(f"    {k}: {v}")
         # logger.info("}\n")
@@ -316,3 +360,6 @@ if __name__ == "__main__":
             pad_val,
             save_path
         )
+
+        results = run_final_test(model, test_seq_lengths, batch_size, data_generator, test_steps)
+        result_dict[task] = results
