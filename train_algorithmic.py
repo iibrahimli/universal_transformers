@@ -5,6 +5,8 @@ from pathlib import Path
 from itertools import cycle
 from functools import partial
 
+from tqdm import trange
+
 import wandb
 import torch
 import torch.nn as nn
@@ -68,7 +70,7 @@ def batch_loss_step(model, batch, loss_fn, device, pad_val):
         source_padding_mask=src_pad_mask,
         target_padding_mask=shifted_tgt_pad_mask,
     )
-    loss_value = loss_fn(out[tgt_pad_mask].view(-1, model.target_vocab_size), target[tgt_pad_mask].view(-1))
+    loss_value = loss_fn(out[~tgt_pad_mask].view(-1, model.target_vocab_size), target[~tgt_pad_mask].view(-1))
     return out, loss_value, ponder_time
 
 
@@ -82,7 +84,7 @@ def batch_loss_step_val(model, batch, loss_fn, device):
     out, ponder_time = model.generate_algorithmic(
         source, src_pad_mask
     )
-    loss_value = loss_fn(out[tgt_pad_mask].flatten(0, 1), target[tgt_pad_mask].view(-1))
+    loss_value = loss_fn(out.flatten(0, 1)[~tgt_pad_mask.flatten(0, 1)], target[~tgt_pad_mask].view(-1))
     return out, loss_value, ponder_time
 
 
@@ -113,7 +115,7 @@ def infer_for_a_step(model, batch):
     model.eval()
     with torch.no_grad():
         out, eval_loss, ponder_time = batch_loss_step_val(model, batch, loss, DEVICE)
-    return out, eval_loss
+    return out, eval_loss, ponder_time
 
 
 def run_evaluation(model, l, batch_size, data_generator, val_steps, step=0):
@@ -151,7 +153,7 @@ def train_loop(
     save_path=Path('None'),
 ):
     # Main training loop.
-    for step in range(train_steps):
+    for step in trange(train_steps):
         train_for_a_step(model, train_length, batch_size, data_generator, step, tr_log_interval, pad_val)
         # Run evaluation.
         if step > 0 and step % val_interval == 0:
