@@ -205,18 +205,21 @@ if __name__ == "__main__":
         help="Label smoothing",
     )
     parser.add_argument(
-        "--tr_log_interval", type=int, default=5, help="Log training loss every N steps"
+        "--tr_log_interval",
+        type=int,
+        default=10,
+        help="Log training loss every N steps",
     )
     parser.add_argument(
         "--val_interval",
         type=int,
-        default=500,
+        default=1000,
         help="Run validation (& log) every N steps",
     )
     parser.add_argument(
         "--save_interval",
         type=int,
-        default=1000,
+        default=2000,
         help="Save checkpoint every N steps",
     )
     parser.add_argument(
