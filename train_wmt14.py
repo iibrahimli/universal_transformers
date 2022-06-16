@@ -274,11 +274,6 @@ if __name__ == "__main__":
         local_rank=local_rank,
     )
 
-    # Demo sentence to try to translate throughout training
-    demo_sample = validation_ds[2]
-    demo_source_txt = demo_sample["translation"]["en"]
-    demo_target_txt = demo_sample["translation"]["de"]
-
     # Initialize model
     model = UniversalTransformer(
         source_vocab_size=tokenizer.vocab_size,
@@ -306,6 +301,9 @@ if __name__ == "__main__":
     ddp_model = torch.nn.parallel.DistributedDataParallel(
         model, device_ids=[local_rank], output_device=local_rank
     )
+
+    # metrics for evaluation
+    bleu = evaluate.load("bleu")
 
     # Step is incremented at the start of iteration, becomes 0
     step = -1
@@ -386,11 +384,10 @@ if __name__ == "__main__":
             if step % args.val_interval == 0:
                 model.eval()
                 val_losses = []
-                bleu = evaluate.load("bleu")
-
-                translation_examples = []
 
                 # BLEU
+                preds = []
+                refs = []
                 for i_ex in range(100):
                     example = validation_ds[i_ex]
                     src_txt = example["translation"]["en"]
@@ -398,18 +395,13 @@ if __name__ == "__main__":
                     translated = utils.translate_text(
                         src_txt, model, tokenizer, device=device
                     )
-                    translation_examples.append(
-                        f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}"
-                    )
                     if len(translated) == 0:
                         # to prevent division by zero in BLEU with empty string
-                        translated = "0"
-                    bleu.add_batch(
-                        predictions=[translated.lower()],
-                        references=[[tgt_txt.lower()]],
-                    )
+                        translated = "a"
+                    preds.append(translated)
+                    refs.append([tgt_txt])
 
-                bleu_score = bleu.compute()["bleu"]
+                bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
 
                 # validation loss
                 with torch.no_grad():
@@ -418,9 +410,9 @@ if __name__ == "__main__":
                         val_losses.append(val_loss.item())
                 val_loss_value = torch.mean(torch.tensor(val_losses)).item()
 
-                # translate demo text
-                demo_trans_text = utils.translate_text(
-                    demo_source_txt, model, tokenizer, device=device
+                # get translation examples
+                translation_examples = utils.get_translation_examples(
+                    model, tokenizer, device, validation_ds, count=5
                 )
 
                 # log to W&B and console
@@ -436,8 +428,3 @@ if __name__ == "__main__":
                 L.log(
                     f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
                 )
-                L.log("")
-                L.log(f"SRC: {demo_source_txt}")
-                L.log(f"TGT: {demo_target_txt}")
-                L.log(f"OUTPUT: {demo_trans_text}")
-                L.log("")

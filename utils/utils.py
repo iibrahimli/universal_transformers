@@ -53,3 +53,14 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
 
     out = tokenizer.decode(out, skip_special_tokens=True)
     return out
+
+
+def get_translation_examples(model, tokenizer, device, dataset, count: int = 10):
+    translation_examples = []
+    for i in range(count):
+        example = dataset[i]
+        src_txt = example["translation"]["en"]
+        tgt_txt = example["translation"]["de"]
+        translated = translate_text(src_txt, model, tokenizer, device=device)
+        translation_examples.append(f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}")
+    return translation_examples
