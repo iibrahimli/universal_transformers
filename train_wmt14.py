@@ -440,5 +440,7 @@ if __name__ == "__main__":
                     step=step,
                 )
                 L.log(
-                    f"[{step}] val_loss: {val_loss_value:.4f}  val_bleu: {bleu_score:.4f}"
+                    f"[{step}] val_loss: {val_loss_value:.4f}  "
+                    f"val_bleu: {bleu_score:.4f}  "
+                    f"val_bertscore: {bertscore_f1:.4f}"
                 )
