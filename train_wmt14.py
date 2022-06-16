@@ -11,6 +11,7 @@ import argparse
 import wandb
 import torch
 import torch.nn as nn
+import numpy as np
 import evaluate
 from datasets import load_dataset
 from transformers import AutoTokenizer
@@ -307,6 +308,7 @@ if __name__ == "__main__":
 
     # metrics for evaluation
     bleu = evaluate.load("bleu")
+    bertscore = evaluate.load("bertscore")
 
     # Step is incremented at the start of iteration, becomes 0
     step = -1
@@ -405,6 +407,11 @@ if __name__ == "__main__":
                     refs.append([tgt_txt])
 
                 bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
+                bertscore_f1 = np.mean(
+                    bertscore.compute(predictions=preds, references=refs, lang="de")[
+                        "f1"
+                    ]
+                )
 
                 # validation loss
                 with torch.no_grad():
@@ -421,7 +428,11 @@ if __name__ == "__main__":
                 # log to W&B and console
                 wandb.log(
                     {
-                        "val": {"loss": val_loss_value, "bleu": bleu_score},
+                        "val": {
+                            "loss": val_loss_value,
+                            "bleu": bleu_score,
+                            "bertscore": bertscore_f1,
+                        },
                         "translation_examples": wandb.Html(
                             "\n---\n".join(translation_examples)
                         ),
