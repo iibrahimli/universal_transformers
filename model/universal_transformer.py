@@ -209,14 +209,26 @@ class UniversalTransformer(nn.Module):
         eos_token_id: int,
         min_length: int = 2,
         max_length: int = 100,
+        n_beams: int = 0,
+        use_sampling: bool = True,
+        top_k: int = 100,
+        top_p: float = 0.8,
     ):
         """
         Autoregressively generate output sequence.
 
-        TODO add generation methods: beam search, top-k sampling, etc.
+        Args:
+            source: Source tensor
+            eos_token_id: ID of the end-of-sentence token
+            min_length: Minimum generated sequence length
+            max_length: Maximum generated sequence length
+            n_beams: Number of beams for beam search, 0 = no beam search
+            use_sampling: Whether to use sampling techniques
+            top_k: Randomly sample from top K tokens
+            top_p: Limit top tokens with cumulative probability of p
 
         Returns:
-            Sequence of generated tokens of shape [batch_size, seq_len]
+            Sequence of generated tokens of shape [seq_len]
         """
 
         max_length = min(max_length, self.max_seq_len)
