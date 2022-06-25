@@ -213,7 +213,6 @@ class UniversalTransformer(nn.Module):
         """
         Autoregressively generate output sequence.
 
-        TODO check correctness (huggingface)
         TODO add generation methods: beam search, top-k sampling, etc.
 
         Returns:
