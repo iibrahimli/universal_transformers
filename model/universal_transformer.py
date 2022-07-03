@@ -211,8 +211,9 @@ class UniversalTransformer(nn.Module):
         max_length: int = 100,
         n_beams: int = 0,
         use_sampling: bool = True,
-        top_k: int = 100,
-        top_p: float = 0.8,
+        temperature: float = 1.0,
+        top_k: int = 0,
+        top_p: float = 0.0,
     ):
         """
         Autoregressively generate output sequence.
@@ -231,6 +232,43 @@ class UniversalTransformer(nn.Module):
             Sequence of generated tokens of shape [seq_len]
         """
 
+        def sampling(logits, can_stop=True):
+            filter_value = -float("inf")
+
+            logits /= temperature
+
+            if not can_stop:
+                logits[eos_token_id] = filter_value
+
+            if top_k > 0:
+                # remove tokens with prob less than the last token of top-k
+                indices_to_remove = logits < logits.topk(top_k)[0][-1]
+                logits[indices_to_remove] = filter_value
+
+            if top_p > 0.0:
+                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                cumulative_probs = torch.cumsum(sorted_logits.softmax(-1), dim=-1)
+                
+                # remove tokens with cumulative prob above the threshold
+                sorted_indices_to_remove = cumulative_probs > top_p
+                # Shift the indices to the right to keep also the first token above the threshold
+                sorted_indices_to_remove[1:] = sorted_indices_to_remove[:-1].clone()
+                sorted_indices_to_remove[0] = 0
+
+                indices_to_remove = sorted_indices[sorted_indices_to_remove]
+                logits[indices_to_remove] = filter_value
+            
+            probs = logits.softmax(-1)
+            next_token = torch.multinomial(probs, 1)
+
+            return next_token
+
+        def beam_search(probs, can_stop=True):
+            raise NotImplementedError
+
+        next_tok_fn = sampling if use_sampling else beam_search
+
+        # this limit is due to the positional encoding
         max_length = min(max_length, self.max_seq_len)
 
         # embed source tokens
@@ -239,8 +277,8 @@ class UniversalTransformer(nn.Module):
         # run encoder
         memory = self.forward_encoder(source)
 
-        # start from EOS token, append last generated token to the input to
-        # the decoder and generate until EOS token
+        # start from EOS token, append last generated token to the input,
+        # pass new input to the decoder and repeat until EOS or length limit
         generated = torch.tensor(
             [[eos_token_id]], device=memory.device, dtype=torch.long
         )
@@ -249,17 +287,16 @@ class UniversalTransformer(nn.Module):
             target = self.target_tok_emb(generated)
             target_mask = self.generate_subsequent_mask(target)
             output = self.forward_decoder(memory, target, target_mask)
-            output = self.generator(output)
-            output = output.argmax(-1)
-            new_token = output[0, -1:].unsqueeze(0)
-            generated = torch.cat([generated, new_token], dim=1)
+            output = self.generator(output)[0, -1]
+
+            # sample next token, output.shape = [vocab_size]
+            new_token = next_tok_fn(output, can_stop=cur_length >= min_length)
+
+            generated = torch.cat([generated, new_token.unsqueeze(-1)], dim=1)
             cur_length += 1
-            if (
-                generated.squeeze()[-1].item() == eos_token_id
-                and cur_length >= min_length
-            ):
+            if new_token.item() == eos_token_id:
                 break
-        return generated
+        return generated[0]
 
     @staticmethod
     def generate_subsequent_mask(target):
