@@ -128,8 +128,7 @@ if __name__ == "__main__":
             max_length=args.max_seq_len,
             truncation=True,
             return_tensors="pt",
-        ).input_ids
-        print(model_input)
+        ).input_ids.to(device)
 
         # forward
         with torch.no_grad():
