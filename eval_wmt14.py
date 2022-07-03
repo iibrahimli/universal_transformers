@@ -69,19 +69,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--temperature",
         type=float,
-        default=1.0,
+        default=0.8,
         help="Temperature",
     )
     parser.add_argument(
         "--top_k",
         type=int,
-        default=100,
+        default=75,
         help="Top-k",
     )
     parser.add_argument(
         "--top_p",
         type=float,
-        default=0.9,
+        default=0.8,
         help="Top-p",
     )
     args = parser.parse_args()
