@@ -118,6 +118,9 @@ if __name__ == "__main__":
     refs = []
     preds = []
 
+    enc_counts = []
+    dec_counts = []
+
     for sample in tqdm(test_ds):
         source = sample["translation"]["en"]
         target = sample["translation"]["de"]
@@ -132,18 +135,14 @@ if __name__ == "__main__":
 
         # forward
         with torch.no_grad():
-            generated = (
-                model.generate(
-                    model_input,
-                    tokenizer.eos_token_id,
-                    n_beams=0,
-                    use_sampling=True,
-                    temperature=args.temperature,
-                    top_k=args.top_k,
-                    top_p=args.top_p,
-                )
-                .detach()
-                .cpu()
+            generated, enc_count, dec_counts = model.generate_with_counts(
+                model_input,
+                tokenizer.eos_token_id,
+                n_beams=0,
+                use_sampling=True,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
             )
 
         output = tokenizer.decode(
@@ -151,6 +150,9 @@ if __name__ == "__main__":
         )
         refs.append([target])
         preds.append(output)
+
+        enc_counts.append(enc_count)
+        dec_counts.append(np.mean(dec_counts))
 
     bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
     bertscore_f1 = np.mean(
@@ -162,7 +164,12 @@ if __name__ == "__main__":
 
     # save results
     results = pd.DataFrame(
-        {"source": [s[0] for s in refs], "prediction": [s for s in preds]}
+        {
+            "source": [s[0] for s in refs],
+            "prediction": preds,
+            "enc_count": enc_counts,
+            "dec_count": dec_counts,
+        }
     )
     results.to_csv("results.csv", index=False)
     print("Saved results to results.csv")
