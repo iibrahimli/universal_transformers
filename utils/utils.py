@@ -38,6 +38,8 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
     )["input_ids"]
     input_ids = input_ids.to(device)
 
+    model.eval()
+
     with torch.no_grad():
         out = (
             model.generate(
