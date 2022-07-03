@@ -171,6 +171,10 @@ if __name__ == "__main__":
     # save metrics
     with open("metrics.txt", "w") as f:
         f.write(f"Samples: {len(refs)}\n")
+        f.write(f"Temperature: {args.temperature}\n")
+        f.write(f"Top-k: {args.top_k}\n")
+        f.write(f"Top-p: {args.top_p}\n")
+        f.write("-------------------------\n")
         f.write(f"BLEU: {bleu_score:.4f}\n")
         f.write(f"BERT-score: {bertscore_f1:.4f}\n")
     print("Saved metrics to metrics.txt")
