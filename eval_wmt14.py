@@ -14,7 +14,6 @@ from transformers import AutoTokenizer
 
 
 from model import UniversalTransformer
-import utils
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -128,7 +127,8 @@ if __name__ == "__main__":
             source + tokenizer.eos_token,
             max_length=args.max_seq_len,
             truncation=True,
-        )
+            return_tensors="pt",
+        ).input_ids
         print(model_input)
 
         # forward
