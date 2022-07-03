@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max_time_step",
         type=int,
-        default=10,
+        default=15,
         help="Maximum time step",
     )
     parser.add_argument(
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.3,
+        default=0.5,
         help="Temperature",
     )
     parser.add_argument(
@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
         # forward
         with torch.no_grad():
-            generated, enc_count, dec_counts = model.generate_with_counts(
+            generated, enc_count, dec_counts_list = model.generate_with_counts(
                 model_input,
                 tokenizer.eos_token_id,
                 n_beams=0,
@@ -152,7 +152,7 @@ if __name__ == "__main__":
         preds.append(output)
 
         enc_counts.append(enc_count)
-        dec_counts.append(np.mean(dec_counts))
+        dec_counts.append(np.mean(dec_counts_list))
 
     bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
     bertscore_f1 = np.mean(
