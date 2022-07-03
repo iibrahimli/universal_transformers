@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max_time_step",
         type=int,
-        default=15,
+        default=10,
         help="Maximum time step",
     )
     parser.add_argument(
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.5,
+        default=0.3,
         help="Temperature",
     )
     parser.add_argument(
