@@ -115,11 +115,12 @@ if __name__ == "__main__":
 
     model.eval()
 
+    sources = []
     refs = []
     preds = []
 
-    enc_counts = []
-    dec_counts = []
+    enc_ponder_times = []
+    dec_ponder_times = []
 
     for sample in tqdm(test_ds):
         source = sample["translation"]["en"]
@@ -135,7 +136,7 @@ if __name__ == "__main__":
 
         # forward
         with torch.no_grad():
-            generated, enc_count, dec_counts_list = model.generate_with_counts(
+            generated, enc_ponder, dec_ponders = model.generate(
                 model_input,
                 tokenizer.eos_token_id,
                 n_beams=0,
@@ -148,11 +149,13 @@ if __name__ == "__main__":
         output = tokenizer.decode(
             generated, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
+
+        sources.append(source)
         refs.append([target])
         preds.append(output)
 
-        enc_counts.append(enc_count)
-        dec_counts.append(np.mean(dec_counts_list))
+        enc_ponder_times.append(enc_ponder)
+        dec_ponder_times.append(torch.tensor(dec_ponders).mean())
 
     bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
     bertscore_f1 = np.mean(
@@ -165,10 +168,11 @@ if __name__ == "__main__":
     # save results
     results = pd.DataFrame(
         {
-            "source": [s[0] for s in refs],
+            "source": [x[0] for x in sources],
+            "target": [x[0] for x in refs],
             "prediction": preds,
-            "enc_count": enc_counts,
-            "dec_count": dec_counts,
+            "enc_ponder_time": enc_ponder_times,
+            "dec_ponder_time": dec_ponder_times,
         }
     )
     results.to_csv("results.csv", index=False)
