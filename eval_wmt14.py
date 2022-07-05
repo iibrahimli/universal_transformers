@@ -155,7 +155,7 @@ if __name__ == "__main__":
         preds.append(output)
 
         enc_ponder_times.append(enc_ponder)
-        dec_ponder_times.append(np.mean([t.mean() for t in dec_ponders]))
+        dec_ponder_times.append(torch.mean(torch.stack(dec_ponders)))
 
     bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
     bertscore_f1 = np.mean(
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     # save results
     results = pd.DataFrame(
         {
-            "source": [x[0] for x in sources],
+            "source": sources,
             "target": [x[0] for x in refs],
             "prediction": preds,
             "enc_ponder_time": enc_ponder_times,
