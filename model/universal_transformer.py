@@ -291,7 +291,7 @@ class UniversalTransformer(nn.Module):
 
         # run encoder
         memory = self.forward_encoder(source)
-        enc_ponder = self.enc_ponder_time.copy()
+        enc_ponder = self.enc_ponder_time.detach()
 
         dec_ponders = []
 
@@ -306,7 +306,7 @@ class UniversalTransformer(nn.Module):
             target_mask = self.generate_subsequent_mask(target)
             output = self.forward_decoder(memory, target, target_mask)
             output = self.generator(output)[0, -1]
-            dec_ponders.append(self.dec_ponder_time.copy())
+            dec_ponders.append(self.dec_ponder_time.detach())
 
             # sample next token, output.shape = [vocab_size]
             new_token = next_tok_fn(output, can_stop=cur_length >= min_length)
