@@ -155,15 +155,12 @@ if __name__ == "__main__":
         preds.append(output)
 
         enc_ponder_times.append(enc_ponder)
-        dec_ponder_times.append(torch.tensor(dec_ponders).mean())
+        dec_ponder_times.append(np.mean([t.mean() for t in dec_ponders]))
 
     bleu_score = bleu.compute(predictions=preds, references=refs)["bleu"]
     bertscore_f1 = np.mean(
         bertscore.compute(predictions=preds, references=refs, lang="de")["f1"]
     )
-
-    print(f"BLEU: {bleu_score:.4f}")
-    print(f"BERT-score: {bertscore_f1:.4f}")
 
     # save results
     results = pd.DataFrame(
@@ -188,3 +185,7 @@ if __name__ == "__main__":
         f.write(f"BLEU: {bleu_score:.4f}\n")
         f.write(f"BERT-score: {bertscore_f1:.4f}\n")
     print("Saved metrics to metrics.txt")
+
+    # print contents of metrics.txt
+    with open("metrics.txt", "r") as f:
+        print(f.read())
