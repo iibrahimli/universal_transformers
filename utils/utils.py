@@ -41,7 +41,7 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
     model.eval()
 
     with torch.no_grad():
-        out = (
+        out, _, _ = (
             model.generate(
                 input_ids,
                 eos_token_id=tokenizer.eos_token_id,

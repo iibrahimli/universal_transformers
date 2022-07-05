@@ -76,7 +76,7 @@ if __name__ == "__main__":
     input_text = args.input_text
     input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
     input_ids = input_ids.to(device)
-    output_ids = model.generate(input_ids, eos_token_id=tokenizer.eos_token_id)
+    output_ids, _, _ = model.generate(input_ids, eos_token_id=tokenizer.eos_token_id)
     output_text = tokenizer.decode(output_ids.squeeze(0))
 
     # Print output
