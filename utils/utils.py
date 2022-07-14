@@ -23,48 +23,13 @@ def prepare_target(labels: Tensor, attention_mask: Tensor, decoder_start_token_i
     return shifted_labels, shifted_attn_mask
 
 
-def translate_tokens(
-    input_ids: Tensor,
-    model: nn.Module,
-    tokenizer,
-    device: str = "cpu",
-    trim: bool = True,
-):
-    """
-    Translate tokens.
-    """
-
-    if input_ids.dim() == 1:
-        input_ids = input_ids.unsqueeze(0)
-    input_ids = input_ids.to(device)
-
-    if trim:
-        # remove trailing eos tokens (if any)
-        for last_id in range(input_ids.shape[1] - 1, -1, -1):
-            if input_ids[0, last_id] != tokenizer.eos_token_id:
-                break
-        last_id += 1
-
-    with torch.no_grad():
-        out = (
-            model.generate(
-                input_ids[0, :last_id],
-                eos_token_id=tokenizer.eos_token_id,
-                min_length=2,
-                max_length=100,
-            )
-            .squeeze()
-            .detach()
-            .cpu()
-        )
-
-    return out
-
-
 def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"):
     """
     Translate a text.
     """
+    # add EOS token if not already present
+    if not source.endswith(tokenizer.eos_token):
+        source += tokenizer.eos_token
     input_ids = tokenizer(
         source,
         truncation=True,
@@ -73,8 +38,10 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
     )["input_ids"]
     input_ids = input_ids.to(device)
 
+    model.eval()
+
     with torch.no_grad():
-        out = (
+        out, _, _ = (
             model.generate(
                 input_ids,
                 eos_token_id=tokenizer.eos_token_id,
@@ -88,3 +55,14 @@ def translate_text(source: str, model: nn.Module, tokenizer, device: str = "cpu"
 
     out = tokenizer.decode(out, skip_special_tokens=True)
     return out
+
+
+def get_translation_examples(model, tokenizer, device, dataset, count: int = 10):
+    translation_examples = []
+    for i in range(count):
+        example = dataset[i]
+        src_txt = example["translation"]["en"]
+        tgt_txt = example["translation"]["de"]
+        translated = translate_text(src_txt, model, tokenizer, device=device)
+        translation_examples.append(f"S: {src_txt}\nT: {tgt_txt}\nO: {translated}")
+    return translation_examples

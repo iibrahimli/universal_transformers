@@ -98,6 +98,9 @@ class UniversalTransformer(nn.Module):
         self.target_vocab_size = target_vocab_size
         self.d_model = d_model
 
+        self.enc_ponder_time = None
+        self.dec_ponder_time = None
+    
     def forward(
         self,
         source: Tensor,
@@ -148,16 +151,7 @@ class UniversalTransformer(nn.Module):
         n_updates = torch.zeros_like(halting_probability)
         ponder_time = torch.zeros_like(halting_probability)
         new_src = src.clone()
-        """
-        Perform forward pass of the encoder.
-        Args:
-
-            source_padding_mask: Mask of shape [batch_size, src_seq_len]
-            source: Tensor of shape [batch_size, src_seq_len, embedding_dim]
-
-        Returns:
-            Has shape [batch_size, src_seq_len, embedding_dim]
-        """
+        
         for time_step in range(self.max_time_step):
             still_running = halting_probability < self.halting_thresh
             p = self.halting_layer(new_src)
@@ -201,6 +195,9 @@ class UniversalTransformer(nn.Module):
         remainders = torch.zeros_like(halting_probability)
         n_updates = torch.zeros_like(halting_probability)
         new_target = target.clone()
+
+        self.dec_ponder_time = torch.zeros_like(halting_probability)
+
         for time_step in range(self.max_time_step):
             still_running = halting_probability < self.halting_thresh
             p = self.halting_layer(new_target)
@@ -222,6 +219,9 @@ class UniversalTransformer(nn.Module):
                 memory_key_padding_mask=memory_padding_mask,
             )
             target = (new_target * update_weights) + (target * (1 - update_weights))
+
+            # update counter
+            self.dec_ponder_time[~new_halted] += 1
         return target
 
     def generate(
@@ -230,17 +230,66 @@ class UniversalTransformer(nn.Module):
         eos_token_id: int,
         min_length: int = 2,
         max_length: int = 100,
+        n_beams: int = 0,
+        use_sampling: bool = True,
+        temperature: float = 1.0,
+        top_k: int = 0,
+        top_p: float = 0.0,
     ):
         """
         Autoregressively generate output sequence.
 
-        TODO check correctness (huggingface)
-        TODO add generation methods: beam search, top-k sampling, etc.
+        Args:
+            source: Source tensor
+            eos_token_id: ID of the end-of-sentence token
+            min_length: Minimum generated sequence length
+            max_length: Maximum generated sequence length
+            n_beams: Number of beams for beam search, 0 = no beam search
+            use_sampling: Whether to use sampling techniques
+            top_k: Randomly sample from top K tokens
+            top_p: Limit top tokens with cumulative probability of p
 
         Returns:
-            Sequence of generated tokens of shape [batch_size, seq_len]
+            Generated tokens of shape [seq_len], enc & dec ponder times
         """
 
+        def sampling(logits, can_stop=True):
+            filter_value = -float("inf")
+
+            logits /= temperature
+
+            if not can_stop:
+                logits[eos_token_id] = filter_value
+
+            if top_k > 0:
+                # remove tokens with prob less than the last token of top-k
+                indices_to_remove = logits < logits.topk(top_k)[0][-1]
+                logits[indices_to_remove] = filter_value
+
+            if top_p > 0.0:
+                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                cumulative_probs = torch.cumsum(sorted_logits.softmax(-1), dim=-1)
+                
+                # remove tokens with cumulative prob above the threshold
+                sorted_indices_to_remove = cumulative_probs > top_p
+                # Shift the indices to the right to keep also the first token above the threshold
+                sorted_indices_to_remove[1:] = sorted_indices_to_remove[:-1].clone()
+                sorted_indices_to_remove[0] = 0
+
+                indices_to_remove = sorted_indices[sorted_indices_to_remove]
+                logits[indices_to_remove] = filter_value
+            
+            probs = logits.softmax(-1)
+            next_token = torch.multinomial(probs, 1)
+
+            return next_token
+
+        def beam_search(probs, can_stop=True):
+            raise NotImplementedError
+
+        next_tok_fn = sampling if use_sampling else beam_search
+
+        # this limit is due to the positional encoding
         max_length = min(max_length, self.max_seq_len)
 
         # embed source tokens
@@ -249,8 +298,10 @@ class UniversalTransformer(nn.Module):
         # run encoder
         memory, ponder_time = self.forward_encoder(source)
 
-        # start from EOS token, append last generated token to the input to
-        # the decoder and generate until EOS token
+        dec_ponders = []
+
+        # start from EOS token, append last generated token to the input,
+        # pass new input to the decoder and repeat until EOS or length limit
         generated = torch.tensor(
             [[eos_token_id]], device=memory.device, dtype=torch.long
         )
@@ -259,17 +310,17 @@ class UniversalTransformer(nn.Module):
             target = self.target_tok_emb(generated)
             target_mask = self.generate_subsequent_mask(target)
             output = self.forward_decoder(memory, target, target_mask)
-            output = self.generator(output)
-            output = output.argmax(-1)
-            new_token = output[0, -1:].unsqueeze(0)
-            generated = torch.cat([generated, new_token], dim=1)
+            output = self.generator(output)[0, -1]
+            dec_ponders.append(self.dec_ponder_time.detach().cpu())
+
+            # sample next token, output.shape = [vocab_size]
+            new_token = next_tok_fn(output, can_stop=cur_length >= min_length)
+
+            generated = torch.cat([generated, new_token.unsqueeze(-1)], dim=1)
             cur_length += 1
-            if (
-                generated.squeeze()[-1].item() == eos_token_id
-                and cur_length >= min_length
-            ):
+            if new_token.item() == eos_token_id:
                 break
-        return generated
+        return generated[0], enc_ponder, dec_ponders
 
     def generate_algorithmic(
         self,
@@ -278,9 +329,6 @@ class UniversalTransformer(nn.Module):
     ):
         """
         Autoregressively generate output sequence for algorithmic tasks.
-
-        TODO check correctness (huggingface)
-        TODO add generation methods: beam search, top-k sampling, etc.
 
         Returns:
             Sequence of generated tokens of shape [batch_size, seq_len]
