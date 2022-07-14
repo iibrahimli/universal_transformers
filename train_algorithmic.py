@@ -159,6 +159,8 @@ def run_final_test(model, test_lengths, batch_size, data_generator, steps):
             char_accuracy.append(char_acc)
             max_ponder_time.append(float(torch.max(ponder_time)))
             avg_ponder_time.append(float(torch.mean(ponder_time)))
+        res_dict[l]["seq acc"] = np.mean(seq_accuracy)
+        res_dict[l]["char acc"] = np.mean(char_accuracy)
         res_dict[l]["max ponder time"] = np.mean(max_ponder_time)
         res_dict[l]["avg ponder time"] = np.mean(avg_ponder_time)
     return res_dict
