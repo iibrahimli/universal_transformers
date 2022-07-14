@@ -119,8 +119,18 @@ if __name__ == "__main__":
     refs = []
     preds = []
 
-    enc_ponder_times = []
-    dec_ponder_times = []
+    ponders = {
+        "enc": {
+            "min": [],
+            "mean": [],
+            "max": [],
+        },
+        "dec": {
+            "min": [],
+            "mean": [],
+            "max": [],
+        },
+    }
 
     for sample in tqdm(test_ds):
         source = sample["translation"]["en"]
@@ -154,6 +164,10 @@ if __name__ == "__main__":
         refs.append([target])
         preds.append(output)
 
+        ponders["enc"]["min"].append(enc_ponder.min().item())
+        ponders["enc"]["mean"].append(enc_ponder.mean().item())
+        ponders["enc"]["max"].append(enc_ponder.max().item())
+        ponders["dec"]["min"].append(dec_ponders.min().item())
         enc_ponder_times.append(enc_ponder)
         dec_ponder_times.append(np.mean([p.mean().item() for p in dec_ponders]))
 
@@ -168,8 +182,12 @@ if __name__ == "__main__":
             "source": sources,
             "target": [x[0] for x in refs],
             "prediction": preds,
-            "enc_ponder_time": enc_ponder_times,
-            "dec_ponder_time": dec_ponder_times,
+            "enc_ponder_min": enc_ponder_min,
+            "enc_ponder_mean": enc_ponder_mean,
+            "enc_ponder_max": enc_ponder_max,
+            "dec_ponder_min": dec_ponder_min,
+            "dec_ponder_mean": dec_ponder_mean,
+            "dec_ponder_max": dec_ponder_max,
         }
     )
     results.to_csv("results.csv", index=False)
